@@ -1,3 +1,5 @@
+#!/bin/zsh
+
 _fastlane_complete() {
   local word completions
   word="$1"
@@ -13,8 +15,9 @@ _fastlane_complete() {
 
   # parse 'beta' out of 'lane :beta do', etc
   completions=`cat $file | grep "^\s*lane \:" | awk -F ':' '{print $2}' | awk -F ' ' '{print $1}'`
+  completions="$completions
+update_fastlane"
 
   reply=( "${(ps:\n:)completions}" )
 }
 
-compctl -K _fastlane_complete fastlane

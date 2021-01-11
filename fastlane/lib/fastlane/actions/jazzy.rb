@@ -16,9 +16,6 @@ module Fastlane
         "Generate docs using Jazzy"
       end
 
-      def self.details
-      end
-
       def self.available_options
         [
           FastlaneCore::ConfigItem.new(
@@ -43,6 +40,16 @@ module Fastlane
 
       def self.is_supported?(platform)
         [:ios, :mac].include?(platform)
+      end
+
+      def self.example_code
+        [
+          'jazzy'
+        ]
+      end
+
+      def self.category
+        :documentation
       end
     end
   end

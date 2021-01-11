@@ -8,7 +8,16 @@ module Fastlane
           paths = params[:path].map(&:shellescape).join(' ')
         end
 
-        result = Actions.sh("git commit -m #{params[:message].shellescape} #{paths}")
+        skip_git_hooks = params[:skip_git_hooks] ? '--no-verify' : ''
+
+        if params[:allow_nothing_to_commit]
+          nothing_staged = Actions.sh("git --no-pager diff --name-only --staged").empty?
+          UI.success("Nothing staged to commit ✅.") if nothing_staged
+          return if nothing_staged
+        end
+
+        command = "git commit -m #{params[:message].shellescape} #{paths} #{skip_git_hooks}".strip
+        result = Actions.sh(command)
         UI.success("Successfully committed \"#{params[:path]}\" 💾.")
         return result
       end
@@ -21,26 +30,21 @@ module Fastlane
         "Directly commit the given file with the given message"
       end
 
-      def self.details
-        ""
-      end
-
       def self.available_options
         [
           FastlaneCore::ConfigItem.new(key: :path,
                                        description: "The file you want to commit",
-                                       is_string: false,
-                                       verify_block: proc do |value|
-                                         if value.kind_of?(String)
-                                           UI.user_error!("Couldn't find file at path '#{value}'") unless File.exist?(value)
-                                         else
-                                           value.each do |x|
-                                             UI.user_error!("Couldn't find file at path '#{x}'") unless File.exist?(x)
-                                           end
-                                         end
-                                       end),
+                                       is_string: false),
           FastlaneCore::ConfigItem.new(key: :message,
-                                       description: "The commit message that should be used")
+                                       description: "The commit message that should be used"),
+          FastlaneCore::ConfigItem.new(key: :skip_git_hooks,
+                                       description: "Set to true to pass --no-verify to git",
+                                       type: Boolean,
+                                       optional: true),
+          FastlaneCore::ConfigItem.new(key: :allow_nothing_to_commit,
+                                       description: "Set to true to allow commit without any git changes",
+                                       type: Boolean,
+                                       optional: true)
         ]
       end
 
@@ -57,6 +61,19 @@ module Fastlane
 
       def self.is_supported?(platform)
         true
+      end
+
+      def self.example_code
+        [
+          'git_commit(path: "./version.txt", message: "Version Bump")',
+          'git_commit(path: ["./version.txt", "./changelog.txt"], message: "Version Bump")',
+          'git_commit(path: ["./*.txt", "./*.md"], message: "Update documentation")',
+          'git_commit(path: ["./*.txt", "./*.md"], message: "Update documentation", skip_git_hooks: true)'
+        ]
+      end
+
+      def self.category
+        :source_control
       end
     end
   end

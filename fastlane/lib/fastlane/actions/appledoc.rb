@@ -22,6 +22,7 @@ module Fastlane
         create_docset: "--create-docset",
         install_docset: "--install-docset",
         publish_docset: "--publish-docset",
+        no_create_docset: "--no-create-docset",
         html_anchors: "--html-anchors",
         clean_output: "--clean-output",
         docset_bundle_id: "--docset-bundle-id",
@@ -54,7 +55,7 @@ module Fastlane
 
       def self.run(params)
         unless Helper.test?
-          UI.message("Install using `brew install homebrew/boneyard/appledoc`")
+          UI.message("Install using `brew install appledoc`")
           UI.user_error!("appledoc not installed") if `which appledoc`.length == 0
         end
 
@@ -70,9 +71,10 @@ module Fastlane
         appledoc_args = params_hash_to_cli_args(params_hash)
         UI.success("Generating documentation.")
         cli_args = appledoc_args.join(' ')
-        command = "appledoc #{cli_args}".strip + " \"#{params_hash[:input]}\""
+        input_cli_arg = Array(params_hash[:input]).map(&:shellescape).join(' ')
+        command = "appledoc #{cli_args}".strip + " " + input_cli_arg
         UI.verbose(command)
-        Actions.sh command
+        Actions.sh(command)
       end
 
       def self.params_hash_to_cli_args(params)
@@ -107,19 +109,23 @@ module Fastlane
         output_dir = File.dirname(output_path)
 
         # If the output directory doesn't exist, create it
-        unless Dir.exist? output_dir
-          FileUtils.mkpath output_dir
+        unless Dir.exist?(output_dir)
+          FileUtils.mkpath(output_dir)
         end
       end
 
       def self.description
+        "Generate Apple-like source code documentation from the source code"
+      end
+
+      def self.details
         "Runs `appledoc [OPTIONS] <paths to source dirs or files>` for the project"
       end
 
       def self.available_options
         [
           # PATHS
-          FastlaneCore::ConfigItem.new(key: :input, env_name: "FL_APPLEDOC_INPUT", description: "Path to source files", is_string: true),
+          FastlaneCore::ConfigItem.new(key: :input, env_name: "FL_APPLEDOC_INPUT", description: "Path(s) to source file directories or individual source files. Accepts a single path or an array of paths", is_string: false),
           FastlaneCore::ConfigItem.new(key: :output, env_name: "FL_APPLEDOC_OUTPUT", description: "Output path", is_string: true, optional: true),
           FastlaneCore::ConfigItem.new(key: :templates, env_name: "FL_APPLEDOC_TEMPLATES", description: "Template files path", is_string: true, optional: true),
           FastlaneCore::ConfigItem.new(key: :docset_install_path, env_name: "FL_APPLEDOC_DOCSET_INSTALL_PATH", description: "DocSet installation path", is_string: true, optional: true),
@@ -139,6 +145,7 @@ module Fastlane
           FastlaneCore::ConfigItem.new(key: :create_docset, env_name: "FL_APPLEDOC_CREATE_DOCSET", description: "Create documentation set", is_string: false, default_value: false),
           FastlaneCore::ConfigItem.new(key: :install_docset, env_name: "FL_APPLEDOC_INSTALL_DOCSET", description: "Install documentation set to Xcode", is_string: false, default_value: false),
           FastlaneCore::ConfigItem.new(key: :publish_docset, env_name: "FL_APPLEDOC_PUBLISH_DOCSET", description: "Prepare DocSet for publishing", is_string: false, default_value: false),
+          FastlaneCore::ConfigItem.new(key: :no_create_docset, env_name: "FL_APPLEDOC_NO_CREATE_DOCSET", description: "Create HTML and skip creating a DocSet", is_string: false, default_value: false),
           FastlaneCore::ConfigItem.new(key: :html_anchors, env_name: "FL_APPLEDOC_HTML_ANCHORS", description: "The html anchor format to use in DocSet HTML", is_string: true, optional: true),
           FastlaneCore::ConfigItem.new(key: :clean_output, env_name: "FL_APPLEDOC_CLEAN_OUTPUT", description: "Remove contents of output path before starting", is_string: false, default_value: false),
 
@@ -155,7 +162,7 @@ module Fastlane
           FastlaneCore::ConfigItem.new(key: :docset_publisher_id, env_name: "FL_APPLEDOC_DOCSET_PUBLISHER_ID", description: "DocSet publisher identifier", is_string: true, optional: true),
           FastlaneCore::ConfigItem.new(key: :docset_publisher_name, env_name: "FL_APPLEDOC_DOCSET_PUBLISHER_NAME", description: "DocSet publisher name", is_string: true, optional: true),
           FastlaneCore::ConfigItem.new(key: :docset_min_xcode_version, env_name: "FL_APPLEDOC_DOCSET_MIN_XCODE_VERSION", description: "DocSet min. Xcode version", is_string: true, optional: true),
-          FastlaneCore::ConfigItem.new(key: :docset_platform_family, env_name: "FL_APPLEDOC_DOCSET_PLATFORM_FAMILY", description: "DocSet platform familiy", is_string: true, optional: true),
+          FastlaneCore::ConfigItem.new(key: :docset_platform_family, env_name: "FL_APPLEDOC_DOCSET_PLATFORM_FAMILY", description: "DocSet platform family", is_string: true, optional: true),
           FastlaneCore::ConfigItem.new(key: :docset_cert_issuer, env_name: "FL_APPLEDOC_DOCSET_CERT_ISSUER", description: "DocSet certificate issuer", is_string: true, optional: true),
           FastlaneCore::ConfigItem.new(key: :docset_cert_signer, env_name: "FL_APPLEDOC_DOCSET_CERT_SIGNER", description: "DocSet certificate signer", is_string: true, optional: true),
           FastlaneCore::ConfigItem.new(key: :docset_bundle_filename, env_name: "FL_APPLEDOC_DOCSET_BUNDLE_FILENAME", description: "DocSet bundle filename", is_string: true, optional: true),
@@ -190,6 +197,29 @@ module Fastlane
 
       def self.is_supported?(platform)
         [:ios, :mac].include?(platform)
+      end
+
+      def self.category
+        :documentation
+      end
+
+      def self.example_code
+        [
+          'appledoc(
+            project_name: "MyProjectName",
+            project_company: "Company Name",
+            input: [
+              "MyProjectSources",
+              "MyProjectSourceFile.h"
+            ],
+            ignore: [
+              "ignore/path/1",
+              "ingore/path/2"
+            ],
+            options: "--keep-intermediate-files --search-undocumented-doc",
+            warnings: "--warn-missing-output-path --warn-missing-company-id"
+          )'
+        ]
       end
     end
   end

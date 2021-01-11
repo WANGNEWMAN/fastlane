@@ -14,6 +14,20 @@ module Fastlane
     :sigh,
     :match,
     :scan,
-    :gym
+    :gym,
+    :precheck
+  ]
+
+  # a list of all the config files we currently expect
+  TOOL_CONFIG_FILES = [
+    "Appfile",
+    "Deliverfile",
+    "Fastfile",
+    "Gymfile",
+    "Matchfile",
+    "Precheckfile",
+    "Scanfile",
+    "Screengrabfile",
+    "Snapshotfile"
   ]
 end

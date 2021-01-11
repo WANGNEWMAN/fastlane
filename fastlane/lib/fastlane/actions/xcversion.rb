@@ -2,6 +2,8 @@ module Fastlane
   module Actions
     class XcversionAction < Action
       def self.run(params)
+        Actions.verify_gem!('xcode-install')
+
         version = params[:version]
         xcode = Helper::XcversionHelper.find_xcode(version)
         UI.user_error!("Cannot find an installed Xcode satisfying '#{version}'") if xcode.nil?
@@ -16,8 +18,12 @@ module Fastlane
         "Select an Xcode to use by version specifier"
       end
 
-      def self.author
-        "oysta"
+      def self.details
+        "Finds and selects a version of an installed Xcode that best matches the provided [`Gem::Version` requirement specifier](http://www.rubydoc.info/github/rubygems/rubygems/Gem/Version)"
+      end
+
+      def self.authors
+        ["oysta"]
       end
 
       def self.available_options
@@ -31,7 +37,18 @@ module Fastlane
       end
 
       def self.is_supported?(platform)
-        [:ios, :mac].include? platform
+        [:ios, :mac].include?(platform)
+      end
+
+      def self.example_code
+        [
+          'xcversion(version: "8.1") # Selects Xcode 8.1.0',
+          'xcversion(version: "~> 8.1.0") # Selects the latest installed version from the 8.1.x set'
+        ]
+      end
+
+      def self.category
+        :building
       end
     end
   end

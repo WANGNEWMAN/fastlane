@@ -34,7 +34,18 @@ module Fastlane
       end
 
       def self.is_supported?(platform)
-        [:ios, :mac].include? platform
+        [:ios, :mac].include?(platform)
+      end
+
+      def self.example_code
+        [
+          'clean_cocoapods_cache',
+          'clean_cocoapods_cache(name: "CACHED_POD")'
+        ]
+      end
+
+      def self.category
+        :building
       end
     end
   end

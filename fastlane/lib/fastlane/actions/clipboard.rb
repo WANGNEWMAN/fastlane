@@ -2,9 +2,15 @@ module Fastlane
   module Actions
     class ClipboardAction < Action
       def self.run(params)
-        UI.message("Storing '#{params[:value]}' in the clipboard 🎨")
+        value = params[:value]
 
-        `echo "#{params[:value]}" | tr -d '\n' | pbcopy` # we don't use `sh`, as the command looks ugly
+        truncated_value = value[0..800].gsub(/\s\w+\s*$/, '...')
+        UI.message("Storing '#{truncated_value}' in the clipboard 🎨")
+
+        if FastlaneCore::Helper.mac?
+          require 'open3'
+          Open3.popen3('pbcopy') { |input, _, _| input << value }
+        end
       end
 
       #####################################################
@@ -24,11 +30,22 @@ module Fastlane
       end
 
       def self.authors
-        ["KrauseFx"]
+        ["KrauseFx", "joshdholtz"]
       end
 
       def self.is_supported?(platform)
         true
+      end
+
+      def self.example_code
+        [
+          'clipboard(value: "https://docs.fastlane.tools/")',
+          'clipboard(value: lane_context[SharedValues::HOCKEY_DOWNLOAD_LINK] || "")'
+        ]
+      end
+
+      def self.category
+        :misc
       end
     end
   end

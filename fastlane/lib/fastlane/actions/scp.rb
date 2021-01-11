@@ -10,13 +10,13 @@ module Fastlane
         ret = nil
         Net::SCP.start(params[:host], params[:username], { port: params[:port].to_i, password: params[:password] }) do |scp|
           if params[:upload]
-            scp.upload! params[:upload][:src], params[:upload][:dst], recursive: true
+            scp.upload!(params[:upload][:src], params[:upload][:dst], recursive: true)
             UI.message(['[SCP COMMAND]', "Successfully Uploaded", params[:upload][:src], params[:upload][:dst]].join(': '))
           end
           if params[:download]
 
-            t_ret = scp.download! params[:download][:src], params[:download][:dst], recursive: true
-            UI.message(['[SCP COMMAND]', "Successfully Downloaded", params[:upload][:src], params[:upload][:dst]].join(': '))
+            t_ret = scp.download!(params[:download][:src], params[:download][:dst], recursive: true)
+            UI.message(['[SCP COMMAND]', "Successfully Downloaded", params[:download][:src], params[:download][:dst]].join(': '))
             unless params[:download][:dst]
               ret = t_ret
             end
@@ -44,6 +44,7 @@ module Fastlane
                                        short_option: "-p",
                                        env_name: "FL_SSH_PASSWORD",
                                        description: "Password",
+                                       sensitive: true,
                                        optional: true,
                                        is_string: true),
           FastlaneCore::ConfigItem.new(key: :host,
@@ -82,6 +83,31 @@ module Fastlane
 
       def self.is_supported?(platform)
         true
+      end
+
+      def self.example_code
+        [
+          'scp(
+            host: "dev.januschka.com",
+            username: "root",
+            upload: {
+              src: "/root/dir1",
+              dst: "/tmp/new_dir"
+            }
+          )',
+          'scp(
+            host: "dev.januschka.com",
+            username: "root",
+            download: {
+              src: "/root/dir1",
+              dst: "/tmp/new_dir"
+            }
+          )'
+        ]
+      end
+
+      def self.category
+        :misc
       end
     end
   end

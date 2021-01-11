@@ -1,4 +1,3 @@
-# rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 module Fastlane
   module Actions
     module SharedValues
@@ -6,9 +5,10 @@ module Fastlane
     end
 
     class OclintAction < Action
+      # rubocop:disable Metrics/PerceivedComplexity
       def self.run(params)
         oclint_path = params[:oclint_path]
-        if `which #{oclint_path}`.to_s.empty? and !Helper.test?
+        if `which #{oclint_path}`.to_s.empty? && !Helper.test?
           UI.user_error!("You have to install oclint or provide path to oclint binary. Fore more details: ") + "http://docs.oclint.org/en/stable/intro/installation.html".yellow
         end
 
@@ -26,12 +26,15 @@ module Fastlane
         end
 
         if params[:select_reqex]
-          UI.important("'select_reqex' paramter is deprecated. Please use 'select_regex' instead.")
+          UI.important("'select_reqex' parameter is deprecated. Please use 'select_regex' instead.")
           select_regex = params[:select_reqex]
         end
 
         select_regex = params[:select_regex] if params[:select_regex] # Overwrite deprecated select_reqex
+        select_regex = ensure_regex_is_not_string!(select_regex)
+
         exclude_regex = params[:exclude_regex]
+        exclude_regex = ensure_regex_is_not_string!(exclude_regex)
 
         files = JSON.parse(File.read(compile_commands)).map do |compile_command|
           file = compile_command['file']
@@ -43,7 +46,7 @@ module Fastlane
           file_ruby = file.gsub('\ ', ' ')
           File.exist?(file_ruby) and
             (!select_regex or file_ruby =~ select_regex) and
-            (!exclude_regex or !(file_ruby =~ exclude_regex))
+            (!exclude_regex or file_ruby !~ exclude_regex)
         end
 
         command_prefix = [
@@ -64,7 +67,7 @@ module Fastlane
           oclint_args << "-rc=#{params[:rc]}" if params[:rc] # Deprecated
         end
 
-        oclint_args << params[:thresholds].map { |t| "-rc=#{t}" } if params[:thresholds]
+        oclint_args << ensure_array_is_not_string!(params[:thresholds]).map { |t| "-rc=#{t}" } if params[:thresholds]
         # Escape ' in rule names with \' when passing on to shell command
         oclint_args << params[:enable_rules].map { |r| "-rule #{r.shellescape}" } if params[:enable_rules]
         oclint_args << params[:disable_rules].map { |r| "-disable-rule #{r.shellescape}" } if params[:disable_rules]
@@ -78,6 +81,8 @@ module Fastlane
         oclint_args << "-allow-duplicated-violations" if params[:allow_duplicated_violations]
         oclint_args << "-p #{compile_commands_dir.shellescape}"
 
+        oclint_args << "-extra-arg=#{params[:extra_arg]}" if params[:extra_arg]
+
         command = [
           command_prefix,
           oclint_path,
@@ -88,6 +93,20 @@ module Fastlane
         Actions.lane_context[SharedValues::FL_OCLINT_REPORT_PATH] = File.expand_path(report_path)
 
         return Action.sh(command)
+      end
+
+      # return a proper regex object if regex string is single-quoted
+      def self.ensure_regex_is_not_string!(regex)
+        return regex unless regex.kind_of?(String)
+
+        Regexp.new(regex)
+      end
+
+      # return a proper array of strings if array string is single-quoted
+      def self.ensure_array_is_not_string!(array)
+        return array unless array.kind_of?(String)
+
+        array.split(',')
       end
 
       #####################################################
@@ -187,9 +206,14 @@ module Fastlane
                                        env_name: "FL_OCLINT_ALLOW_DUPLICATED_VIOLATIONS",
                                        description: "Allow duplicated violations in the OCLint report",
                                        is_string: false,
-                                       default_value: false)
+                                       default_value: false),
+          FastlaneCore::ConfigItem.new(key: :extra_arg,
+                                       env_name: 'FL_OCLINT_EXTRA_ARG',
+                                       description: 'Additional argument to append to the compiler command line',
+                                       optional: true)
         ]
       end
+      # rubocop:enable Metrics/PerceivedComplexity
 
       def self.output
         [
@@ -204,7 +228,42 @@ module Fastlane
       def self.is_supported?(platform)
         true
       end
+
+      def self.details
+        "Run the static analyzer tool [OCLint](http://oclint.org) for your project. You need to have a `compile_commands.json` file in your _fastlane_ directory or pass a path to your file."
+      end
+
+      def self.example_code
+        [
+          'oclint(
+            compile_commands: "commands.json",    # The JSON compilation database, use xctool reporter "json-compilation-database"
+            select_regex: /ViewController.m/,     # Select all files matching this regex
+            exclude_regex: /Test.m/,              # Exclude all files matching this regex
+            report_type: "pmd",                   # The type of the report (default: html)
+            max_priority_1: 10,                   # The max allowed number of priority 1 violations
+            max_priority_2: 100,                  # The max allowed number of priority 2 violations
+            max_priority_3: 1000,                 # The max allowed number of priority 3 violations
+            thresholds: [                         # Override the default behavior of rules
+              "LONG_LINE=200",
+              "LONG_METHOD=200"
+            ],
+            enable_rules: [                       # List of rules to pick explicitly
+              "DoubleNegative",
+              "SwitchStatementsDon\'TNeedDefaultWhenFullyCovered"
+            ],
+            disable_rules: ["GotoStatement"],     # List of rules to disable
+            list_enabled_rules: true,             # List enabled rules
+            enable_clang_static_analyzer: true,   # Enable Clang Static Analyzer, and integrate results into OCLint report
+            enable_global_analysis: true,         # Compile every source, and analyze across global contexts (depends on number of source files, could results in high memory load)
+            allow_duplicated_violations: true,    # Allow duplicated violations in the OCLint report
+            extra_arg: "-Wno-everything"          # Additional argument to append to the compiler command line
+          )'
+        ]
+      end
+
+      def self.category
+        :testing
+      end
     end
   end
 end
-# rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity

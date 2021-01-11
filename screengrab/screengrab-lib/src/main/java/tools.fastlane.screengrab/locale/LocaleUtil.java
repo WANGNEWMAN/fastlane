@@ -1,13 +1,15 @@
 package tools.fastlane.screengrab.locale;
 
 import android.content.res.Configuration;
-import android.support.test.InstrumentationRegistry;
+import android.os.Build;
 import android.util.Log;
+
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import java.lang.reflect.Method;
 import java.util.Locale;
 
-public class LocaleUtil {
+public final class LocaleUtil {
 
     private static final String TAG =  LocaleUtil.class.getSimpleName();
 
@@ -17,6 +19,8 @@ public class LocaleUtil {
             return;
         }
 
+        Locale.setDefault(locale);
+
         try {
             Class amnClass = Class.forName("android.app.ActivityManagerNative");
 
@@ -24,12 +28,19 @@ public class LocaleUtil {
             methodGetDefault.setAccessible(true);
             Object activityManagerNative = methodGetDefault.invoke(amnClass);
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                // getConfiguration moved from ActivityManagerNative to ActivityManagerProxy
+                amnClass = Class.forName(activityManagerNative.getClass().getName());
+            }
+
             Method methodGetConfiguration = amnClass.getMethod("getConfiguration");
             methodGetConfiguration.setAccessible(true);
             Configuration config  = (Configuration) methodGetConfiguration.invoke(activityManagerNative);
 
             config.getClass().getField("userSetLocale").setBoolean(config, true);
             config.locale = locale;
+
+            config.setLayoutDirection(locale);
 
             Method updateConfigurationMethod = amnClass.getMethod("updateConfiguration", Configuration.class);
             updateConfigurationMethod.setAccessible(true);

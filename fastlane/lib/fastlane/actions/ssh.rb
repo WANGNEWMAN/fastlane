@@ -14,7 +14,7 @@ module Fastlane
         ssh.open_channel do |channel|
           channel.exec(command) do |ch, success|
             unless success
-              abort "FAILED: couldn't execute command (ssh.channel.exec)"
+              abort("FAILED: couldn't execute command (ssh.channel.exec)")
             end
             channel.on_data do |ch1, data|
               stdout_data += data
@@ -65,7 +65,7 @@ module Fastlane
           end
         end
         command_word = params[:commands].count == 1 ? "command" : "commands"
-        UI.success("Succesfully executed #{params[:commands].count} #{command_word} on host #{params[:host]}")
+        UI.success("Successfully executed #{params[:commands].count} #{command_word} on host #{params[:host]}")
         Actions.lane_context[SharedValues::SSH_STDOUT_VALUE] = stdout
         Actions.lane_context[SharedValues::SSH_STDERR_VALUE] = stderr
         return { stdout: Actions.lane_context[SharedValues::SSH_STDOUT_VALUE], stderr: Actions.lane_context[SharedValues::SSH_STDERR_VALUE] }
@@ -80,7 +80,7 @@ module Fastlane
       end
 
       def self.details
-        "Lets you execute remote commands via ssh using username/password or ssh-agent"
+        "Lets you execute remote commands via ssh using username/password or ssh-agent. If one of the commands in command-array returns non 0, it fails."
       end
 
       def self.available_options
@@ -93,6 +93,7 @@ module Fastlane
           FastlaneCore::ConfigItem.new(key: :password,
                                        short_option: "-p",
                                        env_name: "FL_SSH_PASSWORD",
+                                       sensitive: true,
                                        description: "Password",
                                        optional: true,
                                        is_string: true),
@@ -138,6 +139,23 @@ module Fastlane
 
       def self.is_supported?(platform)
         true
+      end
+
+      def self.example_code
+        [
+          'ssh(
+            host: "dev.januschka.com",
+            username: "root",
+            commands: [
+              "date",
+              "echo 1 > /tmp/file1"
+            ]
+          )'
+        ]
+      end
+
+      def self.category
+        :misc
       end
     end
   end

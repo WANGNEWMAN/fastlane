@@ -1,16 +1,25 @@
 module Fastlane
   class DocsGenerator
     def self.run(ff, output_path = nil)
-      output_path ||= File.join(Fastlane::FastlaneFolder.path || '.', 'README.md')
+      output_path ||= File.join(FastlaneCore::FastlaneFolder.path || '.', 'README.md')
 
       output = ["fastlane documentation"]
       output << "================"
 
       output << "# Installation"
+      output << ""
+      output << "Make sure you have the latest version of the Xcode command line tools installed:"
+      output << ""
       output << "```"
-      output << "sudo gem install fastlane"
+      output << "xcode-select --install"
       output << "```"
-
+      output << ""
+      output << "Install _fastlane_ using"
+      output << "```"
+      output << "[sudo] gem install fastlane -NV"
+      output << "```"
+      output << "or alternatively using `brew install fastlane`"
+      output << ""
       output << "# Available Actions"
 
       all_keys = ff.runner.lanes.keys.reject(&:nil?)
@@ -35,12 +44,18 @@ module Fastlane
         output << ""
       end
 
-      output << "This README.md is auto-generated and will be re-generated every time to run [fastlane](https://fastlane.tools)."
-      output << "More information about fastlane can be found on [https://fastlane.tools](https://fastlane.tools)."
-      output << "The documentation of fastlane can be found on [GitHub](https://github.com/fastlane/fastlane/tree/master/fastlane)."
+      output << "This README.md is auto-generated and will be re-generated every time [fastlane](https://fastlane.tools) is run."
+      output << "More information about fastlane can be found on [fastlane.tools](https://fastlane.tools)."
+      output << "The documentation of fastlane can be found on [docs.fastlane.tools](https://docs.fastlane.tools)."
+      output << ""
 
-      File.write(output_path, output.join("\n"))
-      UI.success "Successfully generated documentation to path '#{File.expand_path(output_path)}'" if $verbose
+      begin
+        File.write(output_path, output.join("\n"))
+        UI.success("Successfully generated documentation at path '#{File.expand_path(output_path)}'") if FastlaneCore::Globals.verbose?
+      rescue => ex
+        UI.error(ex)
+        UI.error("Couldn't save fastlane documentation at path '#{File.expand_path(output_path)}', make sure you have write access to the containing directory.")
+      end
     end
 
     #####################################################

@@ -19,16 +19,14 @@ module Fastlane
       end
 
       def self.details
-        [
-          "see adb --help for more details"
-        ].join("\n")
+        "see adb --help for more details"
       end
 
       def self.available_options
         [
           FastlaneCore::ConfigItem.new(key: :serial,
                                        env_name: "FL_ANDROID_SERIAL",
-                                       description: "Android serial, which device should be used for this command",
+                                       description: "Android serial of the device to use for this command",
                                        is_string: true,
                                        default_value: ""),
           FastlaneCore::ConfigItem.new(key: :command,
@@ -39,7 +37,7 @@ module Fastlane
           FastlaneCore::ConfigItem.new(key: :adb_path,
                                        env_name: "FL_ADB_PATH",
                                        optional: true,
-                                       description: "The path to your `adb` binary",
+                                       description: "The path to your `adb` binary (can be left blank if the ANDROID_SDK_ROOT environment variable is set)",
                                        is_string: true,
                                        default_value: "adb")
         ]
@@ -48,8 +46,24 @@ module Fastlane
       def self.output
       end
 
+      def self.category
+        :building
+      end
+
+      def self.example_code
+        [
+          'adb(
+            command: "shell ls"
+          )'
+        ]
+      end
+
       def self.return_value
         "The output of the adb command"
+      end
+
+      def self.return_type
+        :string
       end
 
       def self.authors

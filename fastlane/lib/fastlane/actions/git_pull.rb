@@ -5,7 +5,9 @@ module Fastlane
         commands = []
 
         unless params[:only_tags]
-          commands += ["git pull &&"]
+          command = "git pull"
+          command << " --rebase" if params[:rebase]
+          commands += ["#{command} &&"]
         end
 
         commands += ["git fetch --tags"]
@@ -26,6 +28,14 @@ module Fastlane
                                        default_value: false,
                                        verify_block: proc do |value|
                                          UI.user_error!("Please pass a valid value for only_tags. Use one of the following: true, false") unless value.kind_of?(TrueClass) || value.kind_of?(FalseClass)
+                                       end),
+          FastlaneCore::ConfigItem.new(key: :rebase,
+                                       description: "Rebase on top of the remote branch instead of merge",
+                                       is_string: false,
+                                       optional: true,
+                                       default_value: false,
+                                       verify_block: proc do |value|
+                                         UI.user_error!("Please pass a valid value for rebase. Use one of the following: true, false") unless value.kind_of?(TrueClass) || value.kind_of?(FalseClass)
                                        end)
         ]
       end
@@ -36,6 +46,18 @@ module Fastlane
 
       def self.is_supported?(platform)
         true
+      end
+
+      def self.example_code
+        [
+          'git_pull',
+          'git_pull(only_tags: true) # only the tags, no commits',
+          'git_pull(rebase: true) # use --rebase with pull'
+        ]
+      end
+
+      def self.category
+        :source_control
       end
     end
   end

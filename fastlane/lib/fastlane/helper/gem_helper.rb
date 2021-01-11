@@ -4,7 +4,7 @@ module Fastlane
     # this will *not* 'require' the gem
     def self.verify_gem!(gem_name)
       begin
-        Gem::Specification.find_by_name(gem_name)
+        FastlaneRequire.install_gem_if_needed(gem_name: gem_name, require_gem: false)
         # We don't import this by default, as it's not always the same
         # also e.g. cocoapods is just required and not imported
       rescue Gem::LoadError
@@ -18,7 +18,7 @@ module Fastlane
         UI.important("  gem '#{gem_name}'")
         UI.error("and run `bundle install`")
 
-        UI.user_error!("You have to install the `#{gem_name}` gem on this machine") unless Helper.is_test?
+        UI.user_error!("You have to install the `#{gem_name}` gem on this machine") unless Helper.test?
       end
       true
     end
