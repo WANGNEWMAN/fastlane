@@ -21,7 +21,27 @@ describe Fastlane do
             Fastlane::FastFile.new.parse("lane :test do
               verify_pod_keys
             end").runner.execute(:test)
-          end.to_not raise_error
+          end.to_not(raise_error)
+        end
+      end
+
+      describe "the pod keys command" do
+        def command_for(key, target)
+          command = nil
+          allow(Fastlane::Actions::VerifyPodKeysAction).to receive(:`) do |cmd|
+            command = cmd
+            "[cocoapods-keys] secret"
+          end
+          Fastlane::Actions::VerifyPodKeysAction.value(key, target)
+          Shellwords.split(command)
+        end
+
+        it "passes a target name with a space as one argument" do
+          expect(command_for("MyKey", "My App")).to eq(["pod", "keys", "get", "MyKey", "My App"])
+        end
+
+        it "passes no target argument when no target is set" do
+          expect(command_for("MyKey", "")).to eq(["pod", "keys", "get", "MyKey"])
         end
       end
 

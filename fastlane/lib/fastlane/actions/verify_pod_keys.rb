@@ -15,7 +15,7 @@ module Fastlane
 
       def self.plugin_options
         require 'cocoapods-core'
-        podfile = Pod::Podfile.from_file "Podfile"
+        podfile = Pod::Podfile.from_file("Podfile")
         podfile.plugins["cocoapods-keys"]
       end
 
@@ -29,7 +29,9 @@ module Fastlane
       end
 
       def self.value(key, target)
-        value = `pod keys get #{key} #{target}`
+        command = ["pod", "keys", "get", key]
+        command << target unless target.to_s.empty?
+        value = `#{command.shelljoin}`
         value.split("]").last.strip
       end
 
@@ -45,8 +47,22 @@ module Fastlane
         "Verifies all keys referenced from the Podfile are non-empty"
       end
 
+      def self.details
+        "Runs a check against all keys specified in your Podfile to make sure they're more than a single character long. This is to ensure you don't deploy with stubbed keys."
+      end
+
       def self.is_supported?(platform)
-        return true
+        [:ios, :mac].include?(platform)
+      end
+
+      def self.example_code
+        [
+          'verify_pod_keys'
+        ]
+      end
+
+      def self.category
+        :building
       end
     end
   end

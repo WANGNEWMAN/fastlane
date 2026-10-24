@@ -1,7 +1,8 @@
+require_relative 'tunes_base'
 
 module Spaceship
   module Tunes
-    # Represents a submission for review of an iTunes Connect Application
+    # Represents a submission for review of an App Store Connect Application
     # This class handles the submission of all review information and documents
     class AppSubmission < TunesBase
       # @return (Spaceship::Tunes::Application) A reference to the application
@@ -11,13 +12,15 @@ module Spaceship
       # @return (AppVersion) The version to use for this submission
       attr_accessor :version
 
+      # @return (String) The platform of the device. This is usually "ios"
+      # @example
+      #   "appletvos"
+      attr_accessor :platform
+
       # @return (Boolean) Submitted for Review
       attr_accessor :submitted_for_review
 
       # To pass from the user
-
-      # @return (Boolean) Ad ID Info - Limits ads tracking
-      attr_accessor :add_id_info_limits_tracking
 
       # @return (Boolean) Ad ID Info - Serves ads
       attr_accessor :add_id_info_serves_ads
@@ -27,9 +30,6 @@ module Spaceship
 
       # @return (Boolean) Ad ID Info - Tracks installs
       attr_accessor :add_id_info_tracks_install
-
-      # @return (Boolean) Ad ID Info - Uses idfa
-      attr_accessor :add_id_info_uses_idfa
 
       # @return (Boolean) Content Rights - Contains third party content
       attr_accessor :content_rights_contains_third_party_content
@@ -69,11 +69,9 @@ module Spaceship
 
       attr_mapping({
         # Ad ID Info Section
-        'adIdInfo.limitsTracking.value' => :add_id_info_limits_tracking,
         'adIdInfo.servesAds.value' => :add_id_info_serves_ads,
         'adIdInfo.tracksAction.value' => :add_id_info_tracks_action,
         'adIdInfo.tracksInstall.value' => :add_id_info_tracks_install,
-        'adIdInfo.usesIdfa.value' => :add_id_info_uses_idfa,
 
         # Content Rights Section
         'contentRights.containsThirdPartyContent.value' => :content_rights_contains_third_party_content,
@@ -113,10 +111,11 @@ module Spaceship
         end
 
         # @param application (Spaceship::Tunes::Application) The app this submission is for
-        def create(application, version)
-          attrs = client.prepare_app_submissions(application.apple_id, application.edit_version.version_id)
+        def create(application, version, platform: nil)
+          attrs = client.prepare_app_submissions(application.apple_id, application.edit_version(platform: platform).version_id)
           attrs[:application] = application
           attrs[:version] = version
+          attrs[:platform] = platform
 
           return self.factory(attrs)
         end
@@ -124,7 +123,14 @@ module Spaceship
 
       # Save and complete the app submission
       def complete!
-        client.send_app_submission(application.apple_id, raw_data)
+        raw_data_clone = raw_data.dup
+        if self.content_rights_has_rights.nil? || self.content_rights_contains_third_party_content.nil?
+          raw_data_clone.set(["contentRights"], nil)
+        end
+        raw_data_clone.delete(:version)
+        raw_data_clone.delete(:application)
+
+        client.send_app_submission(application.apple_id, application.edit_version(platform: platform).version_id, raw_data_clone)
         @submitted_for_review = true
       end
 

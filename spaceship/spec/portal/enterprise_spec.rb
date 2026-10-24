@@ -1,10 +1,10 @@
-require 'spec_helper'
-
 describe Spaceship::ProvisioningProfile do
   describe "Enterprise Profiles" do
+    # Skip tunes login and login with portal
+    include_examples "common spaceship login", true
     before do
       Spaceship.login
-      adp_enterprise_stubbing
+      PortalStubbing.adp_enterprise_stubbing
     end
     let(:client) { Spaceship::ProvisioningProfile.client }
 

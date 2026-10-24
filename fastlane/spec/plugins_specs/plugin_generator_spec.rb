@@ -1,6 +1,7 @@
 require 'rubygems'
 
 initialized = false
+bundled = false
 test_ui = nil
 generator = nil
 tmp_dir = nil
@@ -8,17 +9,29 @@ oldwd = nil
 
 describe Fastlane::PluginGenerator do
   describe '#generate' do
-    let(:plugin_info) { Fastlane::PluginInfo.new('tester_thing', 'Fabricio Devtoolio', 'fabric.devtools@gmail.com', 'summary') }
+    let(:plugin_info) { Fastlane::PluginInfo.new('tester_thing', 'Fabricio Devtoolio', 'fabric.devtools@gmail.com', 'summary', 'details') }
     let(:plugin_name) { plugin_info.plugin_name }
     let(:gem_name) { plugin_info.gem_name }
     let(:require_path) { plugin_info.require_path }
     let(:author) { plugin_info.author }
     let(:email) { plugin_info.email }
     let(:summary) { plugin_info.summary }
+    let(:details) { plugin_info.details }
+
+    # Paired with the after(:all) below. Not the block form of Dir.chdir,
+    # because rspec has no around(:all).
+    before(:all) do
+      tmp_dir = Dir.mktmpdir
+      oldwd = Dir.pwd
+      Dir.chdir(tmp_dir)
+    end
 
     before(:each) do
       stub_plugin_exists_on_rubygems(plugin_name, false)
 
+      # Generated once, but from a before(:each) rather than a before(:all),
+      # because this needs rspec-mocks and `let` helpers and both raise in a
+      # before(:context) hook.
       unless initialized
         test_ui = Fastlane::PluginGeneratorUI.new
         allow(test_ui).to receive(:message)
@@ -26,19 +39,16 @@ describe Fastlane::PluginGenerator do
         allow(test_ui).to receive(:input).and_raise(":input call was not mocked!")
         allow(test_ui).to receive(:confirm).and_raise(":confirm call was not mocked!")
 
-        tmp_dir = Dir.mktmpdir
-        oldwd = Dir.pwd
-        Dir.chdir(tmp_dir)
-
         generator = Fastlane::PluginGenerator.new(ui: test_ui, dest_root: tmp_dir)
 
-        expect(FastlaneCore::Helper).to receive(:backticks).with('git config --get user.email', print: $verbose).and_return('')
-        expect(FastlaneCore::Helper).to receive(:backticks).with('git config --get user.name', print: $verbose).and_return('')
+        expect(FastlaneCore::Helper).to receive(:backticks).with('git config --get user.email', print: FastlaneCore::Globals.verbose?).and_return('')
+        expect(FastlaneCore::Helper).to receive(:backticks).with('git config --get user.name', print: FastlaneCore::Globals.verbose?).and_return('')
 
         expect(test_ui).to receive(:input).and_return(plugin_name)
         expect(test_ui).to receive(:input).and_return(author)
         expect(test_ui).to receive(:input).and_return(email)
         expect(test_ui).to receive(:input).and_return(summary)
+        expect(test_ui).to receive(:input).and_return(details)
 
         generator.generate
 
@@ -55,6 +65,7 @@ describe Fastlane::PluginGenerator do
       tmp_dir = nil
       oldwd = nil
       initialized = false
+      bundled = false
     end
 
     it "creates gem root directory" do
@@ -101,15 +112,27 @@ describe Fastlane::PluginGenerator do
       gemfile_lines = File.read(gemfile).lines
 
       [
-        "source 'https://rubygems.org'\n",
-        "gemspec\n"
+        "source('https://rubygems.org')",
+        "gem 'bundler'",
+        "gem 'fastlane', '>= #{Fastlane::VERSION}'",
+        "gem 'pry'",
+        "gem 'rake'",
+        "gem 'rspec'",
+        "gem 'rubocop', '#{Fastlane::RUBOCOP_REQUIREMENT}'",
+        "gem 'rubocop-performance'",
+        "gem 'rubocop-require_tools'",
+        "gem 'simplecov'",
+        "gemspec"
       ].each do |line|
-        expect(gemfile_lines).to include(line)
+        # Expect them to match approximately, e.g. using regex
+        expect(gemfile_lines).to include("#{line}\n")
       end
     end
 
     it "creates a plugin.rb file for the plugin" do
-      plugin_rb_file = File.join(tmp_dir, gem_name, 'lib', 'fastlane', 'plugin', "#{plugin_name}.rb")
+      relative_path = File.join('lib', 'fastlane', 'plugin', "#{plugin_name}.rb")
+      plugin_rb_file = File.join(tmp_dir, gem_name, relative_path)
+
       expect(File.exist?(plugin_rb_file)).to be(true)
 
       plugin_rb_contents = File.read(plugin_rb_file)
@@ -119,9 +142,12 @@ describe Fastlane::PluginGenerator do
         lib = File.expand_path('lib')
         $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 
-        # rubocop:disable Lint/Eval
-        eval(plugin_rb_contents)
-        # rubocop:enable Lint/Eval
+        # rubocop:disable Security/Eval
+        # Starting with Ruby 3.3, we must pass the __FILE__ of the actual file location for the all_class method implementation to work.
+        # Also, we expand the relative_path within Dir.chdir, as Dir.chdir on macOS will make it so tmp paths will always be under /private,
+        # while expand_path called from outside of Dir.chdir will not be prefixed by /private
+        eval(plugin_rb_contents, binding, File.expand_path(relative_path), __LINE__)
+        # rubocop:enable Security/Eval
 
         # If we evaluate the contents of the generated plugin.rb file,
         # we'll get the all_classes helper method defined. This ensures
@@ -174,9 +200,9 @@ describe Fastlane::PluginGenerator do
 
       action_contents = File.read(action_file)
 
-      # rubocop:disable Lint/Eval
-      eval(action_contents)
-      # rubocop:enable Lint/Eval
+      # rubocop:disable Security/Eval
+      eval(action_contents, nil, action_file)
+      # rubocop:enable Security/Eval
 
       # If we evaluate the contents of the generated action file,
       # we'll get the Action class defined. This ensures that the
@@ -190,6 +216,7 @@ describe Fastlane::PluginGenerator do
 
       # Check the default behavior of the rest of the methods
       expect(action_class.description).to eq(summary)
+      expect(action_class.details).to eq(details)
       expect(action_class.authors).to eq([author])
       expect(action_class.available_options).to eq([])
       expect(action_class.is_supported?(:ios)).to be(true)
@@ -207,23 +234,17 @@ describe Fastlane::PluginGenerator do
         # ensures that the syntax is valid, and lets us interrogate
         # the values!
         #
-        # rubocop:disable Lint/Eval
+        # rubocop:disable Security/Eval
         gemspec = eval(File.read(gemspec_file))
-        # rubocop:enable Lint/Eval
+        # rubocop:enable Security/Eval
 
         expect(gemspec.name).to eq(gem_name)
         expect(gemspec.author).to eq(author)
+        expect(gemspec.required_ruby_version).to eq(Gem::Requirement.new(">= #{Fastlane::MINIMUM_RUBY}"))
         expect(gemspec.version).to eq(Gem::Version.new('0.1.0'))
         expect(gemspec.email).to eq(email)
         expect(gemspec.summary).to eq(summary)
-        expect(gemspec.development_dependencies).to contain_exactly(
-          Gem::Dependency.new("pry", Gem::Requirement.new([">= 0"]), :development),
-          Gem::Dependency.new("bundler", Gem::Requirement.new([">= 0"]), :development),
-          Gem::Dependency.new("rspec", Gem::Requirement.new([">= 0"]), :development),
-          Gem::Dependency.new("rake", Gem::Requirement.new([">= 0"]), :development),
-          Gem::Dependency.new("rubocop", Gem::Requirement.new([">= 0"]), :development),
-          Gem::Dependency.new("fastlane", Gem::Requirement.new([">= #{Fastlane::VERSION}"]), :development)
-        )
+        expect(gemspec.development_dependencies).to eq([])
       end
     end
 
@@ -233,9 +254,9 @@ describe Fastlane::PluginGenerator do
 
       helper_contents = File.read(helper_file)
 
-      # rubocop:disable Lint/Eval
+      # rubocop:disable Security/Eval
       eval(helper_contents)
-      # rubocop:enable Lint/Eval
+      # rubocop:enable Security/Eval
 
       # If we evaluate the contents of the generated helper file,
       # we'll get the helper class defined. This ensures that the
@@ -253,7 +274,7 @@ describe Fastlane::PluginGenerator do
       expect(File.exist?(spec_helper_file)).to be(true)
 
       spec_helper_module = Object.const_get("SpecHelper")
-      expect(spec_helper_module).not_to be(nil)
+      expect(spec_helper_module).not_to(be(nil))
     end
 
     it "creates a action_spec.rb file" do
@@ -266,34 +287,49 @@ describe Fastlane::PluginGenerator do
       expect(File.exist?(rakefile)).to be(true)
 
       rakefile_contents = File.read(rakefile)
-      expect(rakefile_contents).to eq("require 'bundler/gem_tasks'\n\nrequire 'rspec/core/rake_task'\nRSpec::Core::RakeTask.new\n\nrequire 'rubocop/rake_task'\nRuboCop::RakeTask.new(:rubocop)\n\ntask default: [:spec, :rubocop]\n")
+      expect(rakefile_contents).to eq("require 'bundler/gem_tasks'\n\nrequire 'rspec/core/rake_task'\nRSpec::Core::RakeTask.new\n\nrequire 'rubocop/rake_task'\nRuboCop::RakeTask.new(:rubocop)\n\ntask(default: [:spec, :rubocop])\n")
     end
 
     describe "All tests and style validation of the new plugin are passing" do
+      # before(:each) with a flag, not before(:all). RSpec runs an inner
+      # before(:all) ahead of an outer before(:each), so as a before(:all) this
+      # ran `bundle install` before the plugin above had been generated. It only
+      # ever worked because an earlier example in the file had generated it
+      # already, and running this group on its own failed with Errno::ENOENT for
+      # the plugin directory. See fastlane#30184.
+      before(:each) do
+        unless bundled
+          plugin_sh('bundle install')
+          bundled = true
+        end
+      end
+
       it "rspec tests are passing" do
         # Actually run our generated spec as part of this spec #yodawg
-        Dir.chdir(gem_name) do
-          `rspec &> /dev/null`
-          expect($?.exitstatus).to be(0)
-        end
+        plugin_sh('bundle exec rspec')
+        expect($?.exitstatus).to eq(0)
       end
 
       it "rubocop validations are passing" do
         # Actually run our generated spec as part of this spec #yodawg
-        Dir.chdir(gem_name) do
-          `rubocop &> /dev/null`
-          expect($?.exitstatus).to be(0)
-        end
+        output = plugin_sh('bundle exec rubocop 2>&1')
+        expect($?.exitstatus).to eq(0), output
+        expect(output).not_to include("instead of `require:")
       end
 
       it "`rake` runs both rspec and rubocop" do
-        Dir.chdir(gem_name) do
-          result = `rake`
-          expect($?.exitstatus).to be(0)
-          expect(result).to include("no offenses detected") # rubocop
-          expect(result).to include("example, 0 failures") # rspec
-        end
+        # Actually run our generated spec as part of this spec #yodawg
+        result = plugin_sh('bundle exec rake 2>&1')
+        expect($?.exitstatus).to eq(0), result
+        expect(result).to include("no offenses detected") # rubocop
+        expect(result).to include("example, 0 failures") # rspec
       end
     end
+  end
+
+  private
+
+  def plugin_sh(command, plugin_path = gem_name)
+    Dir.chdir(plugin_path) { |path| `#{command}` }
   end
 end

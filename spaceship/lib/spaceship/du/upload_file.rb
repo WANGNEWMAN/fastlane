@@ -1,4 +1,7 @@
+require 'tmpdir'
 require 'fileutils'
+
+require_relative 'utilities'
 
 module Spaceship
   # a wrapper around the concept of file required to make uploads to DU
@@ -28,14 +31,20 @@ module Spaceship
       end
 
       # As things like screenshots and app icon shouldn't contain the alpha channel
-      # This will copy the image into /tmp to remove the alpha channel there
-      # That's done to not edit the original image
+      # This will copy the image into the temporary directory to remove the
+      # alpha channel there. That's done to not edit the original image.
       def remove_alpha_channel(original)
-        path = "/tmp/#{Digest::MD5.hexdigest(original)}.png"
+        path = File.join(Dir.mktmpdir("spaceship-upload-"), File.basename(original))
         FileUtils.copy(original, path)
-        `sips -s format bmp '#{path}' &> /dev/null ` # &> /dev/null since there is warning because of the extension
-        `sips -s format png '#{path}'`
+        if mac? # sips is only available on macOS
+          `sips -s format bmp '#{path}' &> /dev/null` # &> /dev/null since there is warning because of the extension
+          `sips -s format png '#{path}'`
+        end
         return path
+      end
+
+      def mac?
+        (/darwin/ =~ RUBY_PLATFORM) != nil
       end
     end
 

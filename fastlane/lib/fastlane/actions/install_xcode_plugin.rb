@@ -3,40 +3,39 @@ module Fastlane
     class InstallXcodePluginAction < Action
       def self.run(params)
         require 'fileutils'
+        require 'tmpdir'
 
-        unless params[:github].nil?
-          github_api_url = params[:github].sub('https://github.com', 'https://api.github.com/repos')
-          release = self.fetch_json(github_api_url + '/releases/latest')
-          return if release.nil?
-          params[:url] = release['assets'][0]['browser_download_url']
+        if params[:github]
+          base_api_url = params[:github].sub('https://github.com', 'https://api.github.com/repos')
+
+          GithubApiAction.run(
+            url: File.join(base_api_url, 'releases/latest'),
+            http_method: 'GET',
+            error_handlers: {
+              404 => proc do |result|
+                UI.error("No latest release found for the specified GitHub repository")
+              end,
+              '*' => proc do |result|
+                UI.error("GitHub responded with #{response[:status]}:#{response[:body]}")
+              end
+            }
+          ) do |result|
+            return nil if result[:json].nil?
+            params[:url] = result[:json]['assets'][0]['browser_download_url']
+          end
         end
 
-        zip_path = File.join(Dir.tmpdir, 'plugin.zip')
-        sh "curl -Lso #{zip_path} #{params[:url]}"
-        plugins_path = "#{ENV['HOME']}/Library/Application Support/Developer/Shared/Xcode/Plug-ins"
-        FileUtils.mkdir_p(plugins_path)
-        Action.sh "unzip -qo '#{zip_path}' -d '#{plugins_path}'"
+        Dir.mktmpdir do |dir|
+          zip_path = File.join(dir, 'plugin.zip')
+          # -f fails on an HTTP error instead of saving the error page; --proto also applies to redirects
+          Action.sh("curl", "-f", "-L", "-s", "--proto", "=https", "-o", zip_path, params[:url])
+          plugins_path = "#{ENV['HOME']}/Library/Application Support/Developer/Shared/Xcode/Plug-ins"
+          FileUtils.mkdir_p(plugins_path)
+          Action.sh("unzip", "-qo", zip_path, "-d", plugins_path)
+        end
 
         UI.success("Plugin #{File.basename(params[:url], '.zip')} installed successfully")
         UI.message("Please restart Xcode to use the newly installed plugin")
-      end
-
-      def self.fetch_json(url)
-        require 'excon'
-        require 'json'
-
-        response = Excon.get(url)
-
-        if response[:status] != 200
-          if response[:status] == 404
-            UI.error("No latest release found for the specified GitHub repository")
-          else
-            UI.error("GitHub responded with #{response[:status]}:#{response[:body]}")
-          end
-          return nil
-        end
-
-        JSON.parse(response.body)
       end
 
       #####################################################
@@ -74,11 +73,29 @@ module Fastlane
       end
 
       def self.authors
-        ["NeoNachoSoto"]
+        ["NeoNachoSoto", "tommeier"]
       end
 
       def self.is_supported?(platform)
         [:ios, :mac, :tvos, :watchos, :caros].include?(platform)
+      end
+
+      def self.example_code
+        [
+          'install_xcode_plugin(url: "https://example.com/clubmate/plugin.zip")',
+          'install_xcode_plugin(github: "https://github.com/contentful/ContentfulXcodePlugin")'
+        ]
+      end
+
+      def self.category
+        :deprecated
+      end
+
+      def self.deprecated_notes
+        [
+          "Since Xcode 8, which added runtime library validation and source editor extensions ([New Features in Xcode 8](https://developer.apple.com/library/archive/documentation/DeveloperTools/Conceptual/WhatsNewXcode/Chapters/xcode_8_0.html)), Xcode only loads plugins once you re-sign it yourself, and Xcode 14 removed its plugin system.",
+          "A source editor extension ships inside a macOS app: install the app, then enable the extension in the Extensions section of System Settings."
+        ].join("\n")
       end
     end
   end

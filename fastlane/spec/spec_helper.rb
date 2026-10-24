@@ -1,47 +1,27 @@
-require 'coveralls'
-
-Coveralls.wear_merged! unless ENV["FASTLANE_SKIP_UPDATE_CHECK"]
-
-unless ENV["DEBUG"]
-  $stdout = File.open("/tmp/spaceship_tests", "w")
-end
-
-require 'shellwords'
-
-require 'fastlane'
-
-require 'webmock/rspec'
-
 Fastlane.load_actions
-UI = FastlaneCore::UI
 
-# This module is only used to check the environment is currently a testing env
-module SpecHelper
+def before_each_fastlane
+  Fastlane::Actions.clear_lane_context
+
+  ENV.delete('DELIVER_SCREENSHOTS_PATH')
+  ENV.delete('DELIVER_SKIP_BINARY')
+  ENV.delete('DELIVER_VERSION')
 end
 
-WebMock.disable_net_connect!(allow: 'coveralls.io')
-
-RSpec.configure do |config|
-  config.before(:each) do
-    Fastlane::Actions.clear_lane_context
-
-    ENV.delete 'DELIVER_SCREENSHOTS_PATH'
-    ENV.delete 'DELIVER_SKIP_BINARY'
-    ENV.delete 'DELIVER_VERSION'
+# Runs a command in a fixture project's own bundle, out of process. The bundle reuses the
+# gems installed for this repository and installs with --local, so nothing is fetched.
+def run_in_fixture_bundle(fixture_path, command)
+  require "open3"
+  bundle_path = Bundler.configured_bundle_path
+  # Absolute, as the checked-in path is relative to this repository, not to the fixture
+  env = bundle_path.use_system_gems? ? {} : { "BUNDLE_PATH" => Bundler.root.join(bundle_path.base_path).to_s }
+  Bundler.with_unbundled_env do
+    Dir.chdir(fixture_path) do
+      install_output, status = Open3.capture2e(env, "bundle install --local")
+      raise "bundle install --local failed in #{fixture_path}:\n#{install_output}" unless status.success?
+      Open3.capture2e(env, "bundle exec #{command}").first
+    end
   end
-
-  config.after(:each) do
-    md_path = "spec/fixtures/fastfiles/README.md"
-    File.delete(md_path) if File.exist?(md_path)
-  end
-end
-
-def with_verbose(verbose)
-  orig_verbose = $verbose
-  $verbose = verbose
-  yield if block_given?
-ensure
-  $verbose = orig_verbose
 end
 
 def stub_plugin_exists_on_rubygems(plugin_name, exists)

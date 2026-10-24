@@ -1,4 +1,3 @@
-# rubocop:disable Metrics/AbcSize
 module Fastlane
   module Actions
     module SharedValues
@@ -21,12 +20,8 @@ module Fastlane
         password = params[:password]
         trust_self_signed_certs = params[:trust_self_signed_certs]
 
-        # setup (not)trusting self signed certificates.
         # it's normal to have a self signed certificate on your Xcode Server
-        Excon.defaults[:ssl_verify_peer] = !trust_self_signed_certs # for self-signed certificates
-
-        # create Xcode Server config
-        xcs = XcodeServer.new(host, username, password)
+        xcs = XcodeServer.new(host, username, password, ssl_verify_peer: !trust_self_signed_certs)
         bots = xcs.fetch_all_bots
 
         UI.important("Fetched #{bots.count} Bots from Xcode Server at #{host}.")
@@ -81,7 +76,7 @@ module Fastlane
             UI.important("Archive #{archive_path} already exists, not unzipping again...")
           else
             # unzip the archive
-            sh "unzip -q \"#{zipped_archive_path}\" -d \"#{archive_dir_path}\""
+            sh("unzip -q \"#{zipped_archive_path}\" -d \"#{archive_dir_path}\"")
           end
 
           # reload asset entries to also contain the xcarchive file
@@ -107,10 +102,11 @@ module Fastlane
       end
 
       class XcodeServer
-        def initialize(host, username, password)
+        def initialize(host, username, password, ssl_verify_peer: true)
           @host = host.start_with?('https://') ? host : "https://#{host}"
           @username = username
           @password = password
+          @ssl_verify_peer = ssl_verify_peer
         end
 
         def fetch_all_bots
@@ -130,18 +126,18 @@ module Fastlane
           # create a temp folder and a file, stream the download into it
           Dir.mktmpdir do |dir|
             temp_file = File.join(dir, "tmp_download.#{rand(1_000_000)}")
-            f = open(temp_file, 'w')
-            streamer = lambda do |chunk, remaining_bytes, total_bytes|
-              if remaining_bytes && total_bytes
-                UI.important("Downloading: #{100 - (100 * remaining_bytes.to_f / total_bytes.to_f).to_i}%")
-              else
-                UI.error(chunk.to_s)
+            response = File.open(temp_file, 'w') do |f|
+              streamer = lambda do |chunk, remaining_bytes, total_bytes|
+                if remaining_bytes && total_bytes
+                  UI.important("Downloading: #{100 - (100 * remaining_bytes.to_f / total_bytes.to_f).to_i}%")
+                else
+                  UI.error(chunk.to_s)
+                end
+                f.write(chunk)
               end
-              f.write(chunk)
-            end
 
-            response = self.get_endpoint("/integrations/#{integration_id}/assets", streamer)
-            f.close
+              self.get_endpoint("/integrations/#{integration_id}/assets", streamer)
+            end
 
             UI.user_error!("Integration doesn't have any assets (it probably never ran).") if response.status == 500
             UI.user_error!("Failed to fetch Assets zip for Integration #{integration_id} from Xcode Server at #{@host}, response: #{response.status}: #{response.body}") if response.status != 200
@@ -150,7 +146,7 @@ module Fastlane
             out_folder = File.join(dir, "out_#{rand(1_000_000)}")
             FileUtils.mkdir_p(out_folder)
 
-            action.sh "cd \"#{out_folder}\"; cat \"#{temp_file}\" | gzip -d | tar -x"
+            action.sh("cd \"#{out_folder}\"; cat \"#{temp_file}\" | gzip -d | tar -x")
 
             # then pull the real name from headers
             asset_filename = response.headers['Content-Disposition'].split(';')[1].split('=')[1].delete('"')
@@ -187,7 +183,7 @@ module Fastlane
             'X-XCSAPIVersion' => 1 # XCS API version with this API, Xcode needs this otherwise it explodes in a 500 error fire. Currently Xcode 7 Beta 5 is on Version 5.
           }
 
-          if @username and @password
+          if @username && @password
             userpass = "#{@username}:#{@password}"
             headers['Authorization'] = "Basic #{Base64.strict_encode64(userpass)}"
           end
@@ -200,9 +196,9 @@ module Fastlane
           headers = self.headers || {}
 
           if response_block
-            response = Excon.get(url, response_block: response_block, headers: headers)
+            response = Excon.get(url, response_block: response_block, headers: headers, ssl_verify_peer: @ssl_verify_peer)
           else
-            response = Excon.get(url, headers: headers)
+            response = Excon.get(url, headers: headers, ssl_verify_peer: @ssl_verify_peer)
           end
 
           return response
@@ -224,11 +220,11 @@ module Fastlane
       end
 
       def self.details
-        "This action downloads assets from your Xcode Server Bot (works with Xcode Server
-          using Xcode 6 and 7. By default this action downloads all assets, unzips them and
-          deletes everything except for the `.xcarchive`. If you'd like to keep all downloaded
-          assets, pass `:keep_all_assets: true`. This action returns the path to the downloaded
-          assets folder and puts into shared values the paths to the asset folder and to the `.xcarchive` inside it"
+        [
+          "This action downloads assets from your Xcode Server Bot (works with Xcode Server using Xcode 6 and 7. By default, this action downloads all assets, unzips them and deletes everything except for the `.xcarchive`.",
+          "If you'd like to keep all downloaded assets, pass `keep_all_assets: true`.",
+          "This action returns the path to the downloaded assets folder and puts into shared values the paths to the asset folder and to the `.xcarchive` inside it."
+        ].join("\n")
       end
 
       def self.available_options
@@ -244,7 +240,7 @@ module Fastlane
           FastlaneCore::ConfigItem.new(key: :integration_number,
                                        env_name: "FL_XCODE_SERVER_GET_ASSETS_INTEGRATION_NUMBER",
                                        description: "Optionally you can override which integration's assets should be downloaded. If not provided, the latest integration is used",
-                                       is_string: false,
+                                       type: Integer,
                                        optional: true),
           FastlaneCore::ConfigItem.new(key: :username,
                                        env_name: "FL_XCODE_SERVER_GET_ASSETS_USERNAME",
@@ -254,6 +250,7 @@ module Fastlane
           FastlaneCore::ConfigItem.new(key: :password,
                                        env_name: "FL_XCODE_SERVER_GET_ASSETS_PASSWORD",
                                        description: "Password for your Xcode Server",
+                                       sensitive: true,
                                        optional: true,
                                        default_value: ""),
           FastlaneCore::ConfigItem.new(key: :target_folder,
@@ -265,13 +262,13 @@ module Fastlane
                                        env_name: "FL_XCODE_SERVER_GET_ASSETS_KEEP_ALL_ASSETS",
                                        description: "Whether to keep all assets or let the script delete everything except for the .xcarchive",
                                        optional: true,
-                                       is_string: false,
+                                       type: Boolean,
                                        default_value: false),
           FastlaneCore::ConfigItem.new(key: :trust_self_signed_certs,
                                        env_name: "FL_XCODE_SERVER_GET_ASSETS_TRUST_SELF_SIGNED_CERTS",
                                        description: "Whether to trust self-signed certs on your Xcode Server",
                                        optional: true,
-                                       is_string: false,
+                                       type: Boolean,
                                        default_value: true)
         ]
       end
@@ -283,14 +280,34 @@ module Fastlane
         ]
       end
 
+      def self.return_type
+        :array_of_strings
+      end
+
       def self.authors
         ["czechboy0"]
       end
 
       def self.is_supported?(platform)
-        true
+        [:ios, :mac].include?(platform)
+      end
+
+      def self.example_code
+        [
+          'xcode_server_get_assets(
+            host: "10.99.0.59", # Specify Xcode Server\'s Host or IP Address
+            bot_name: "release-1.3.4" # Specify the particular Bot
+          )'
+        ]
+      end
+
+      def self.category
+        :deprecated
+      end
+
+      def self.deprecated_notes
+        "Xcode Server is no longer supported since Xcode 14 ([Xcode 14 Release Notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-14-release-notes))."
       end
     end
   end
 end
-# rubocop:enable Metrics/AbcSize

@@ -3,6 +3,9 @@ describe Fastlane do
     APPALOOSA_SERVER = Fastlane::Actions::AppaloosaAction::APPALOOSA_SERVER
 
     describe 'Appaloosa Integration' do
+      before :each do
+        allow(FastlaneCore::FastlaneFolder).to receive(:path).and_return(nil)
+      end
       let(:appaloosa_lane) do
         "lane :test do appaloosa(
           {
@@ -66,7 +69,7 @@ describe Fastlane do
 
       context 'when upload_service returns an error' do
         before do
-          stub_request(:get, "#{APPALOOSA_SERVER}/upload_services/presign_form?file=Fastfile1&group_ids=&store_id=556").
+          stub_request(:get, "#{APPALOOSA_SERVER}/upload_services/presign_form?api_key=xxx&file=Fastfile1&group_ids=&store_id=556").
             to_return(status: 200, body: '{ "errors": "A group id is incorrect" }', headers: {})
         end
 
@@ -85,9 +88,9 @@ describe Fastlane do
         let(:expect_error) { 'ERROR: A problem occurred with your API token and your store id. Please try again.' }
 
         before do
-          stub_request(:get, "#{APPALOOSA_SERVER}/upload_services/presign_form?file=Fastfile1&group_ids=&store_id=556").
+          stub_request(:get, "#{APPALOOSA_SERVER}/upload_services/presign_form?api_key=xxx&file=Fastfile1&group_ids=&store_id=556").
             to_return(status: 200, body: presign_payload)
-          stub_request(:put, "http://appaloosa.com/test").
+          stub_request(:put, "https://appaloosa.com/test").
             to_return(status: 200)
           stub_request(:get, "#{APPALOOSA_SERVER}/556/upload_services/url_for_download?api_key=xxx&key=https://appaloosa.com/file.apk&store_id=556").
             to_return(status: 404)
@@ -108,9 +111,9 @@ describe Fastlane do
         let(:expect_error) { 'ERROR: A problem occurred with your API token and your store id. Please try again.' }
 
         before do
-          stub_request(:get, "#{APPALOOSA_SERVER}/upload_services/presign_form?file=Fastfile1&group_ids=&store_id=556").
+          stub_request(:get, "#{APPALOOSA_SERVER}/upload_services/presign_form?api_key=xxx&file=Fastfile1&group_ids=&store_id=556").
             to_return(status: 200, body: presign_payload)
-          stub_request(:put, "http://appaloosa.com/test").
+          stub_request(:put, "https://appaloosa.com/test").
             to_return(status: 200)
           stub_request(:get, "#{APPALOOSA_SERVER}/556/upload_services/url_for_download?api_key=xxx&key=https://appaloosa.com/file.apk&store_id=556").
             to_return(status: 403)
@@ -137,9 +140,9 @@ describe Fastlane do
         end
 
         before do
-          stub_request(:get, "#{APPALOOSA_SERVER}/upload_services/presign_form?file=Fastfile1&group_ids=&store_id=556").
+          stub_request(:get, "#{APPALOOSA_SERVER}/upload_services/presign_form?api_key=xxx&file=Fastfile1&group_ids=&store_id=556").
             to_return(status: 200, body: presign_payload, headers: {})
-          stub_request(:put, "http://appaloosa.com/test").
+          stub_request(:put, "https://appaloosa.com/test").
             to_return(status: 200, body: '', headers: {})
           stub_request(:get, "#{APPALOOSA_SERVER}/556/upload_services/url_for_download?api_key=xxx&key=https://appaloosa.com/file.apk&store_id=556").
             to_return(status: 200, body: upload_services_payload, headers: {})
@@ -147,6 +150,12 @@ describe Fastlane do
 
         it 'works with valid parameters' do
           Fastlane::FastFile.new.parse(appaloosa_lane).runner.execute(:test)
+        end
+
+        it 'uploads the binary over the presigned HTTPS URL' do
+          Fastlane::FastFile.new.parse(appaloosa_lane).runner.execute(:test)
+
+          expect(a_request(:put, "https://appaloosa.com/test")).to have_been_made.once
         end
       end
     end

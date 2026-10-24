@@ -1,6 +1,10 @@
 describe Fastlane do
   describe Fastlane::FastFile do
     describe "OCLint Integration" do
+      before :each do
+        allow(FastlaneCore::FastlaneFolder).to receive(:path).and_return(nil)
+      end
+
       it "raises an exception when the default compile_commands.json is not present" do
         expect do
           Fastlane::FastFile.new.parse("lane :test do
@@ -16,7 +20,7 @@ describe Fastlane do
             )
           end").runner.execute(:test)
 
-        expect(result).to match(%r{cd .* && oclint -report-type=html -o=oclint_report.html -p ./fastlane/spec/fixtures/oclint \".*})
+        expect(result).to match(%r{cd .* && oclint -report-type=html -o=oclint_report.html -p ./fastlane/spec/fixtures/oclint fastlane/spec/fixtures/oclint/src/.*})
       end
 
       it "works given a path to the directory containing compile_commands.json" do
@@ -26,7 +30,7 @@ describe Fastlane do
             )
           end").runner.execute(:test)
 
-        expect(result).to match(%r{cd .* && oclint -report-type=html -o=oclint_report.html -p ./fastlane/spec/fixtures/oclint \".*})
+        expect(result).to match(%r{cd .* && oclint -report-type=html -o=oclint_report.html -p ./fastlane/spec/fixtures/oclint fastlane/spec/fixtures/oclint/src/.*})
       end
 
       it "works with all parameters" do
@@ -46,7 +50,8 @@ describe Fastlane do
               list_enabled_rules: true,
               enable_clang_static_analyzer: true,
               enable_global_analysis: true,
-              allow_duplicated_violations: true
+              allow_duplicated_violations: true,
+              extra_arg: '-Wno-everything'
             )
           end").runner.execute(:test)
 
@@ -61,19 +66,49 @@ describe Fastlane do
         expect(result).to include(' -enable-clang-static-analyzer ')
         expect(result).to include(' -enable-global-analysis ')
         expect(result).to include(' -allow-duplicated-violations ')
+        expect(result).to include(' -extra-arg=-Wno-everything ')
       end
 
       it "works with single quote in rule name" do
+        rule = "CoveredSwitchStatementsDon'tNeedDefault"
         result = Fastlane::FastFile.new.parse("lane :test do
             oclint(
               compile_commands: './fastlane/spec/fixtures/oclint/compile_commands.json',
-              enable_rules: [\"CoveredSwitchStatementsDon'tNeedDefault\"],
-              disable_rules: [\"CoveredSwitchStatementsDon'tNeedDefault\"]
+              enable_rules: [\"#{rule}\"],
+              disable_rules: [\"#{rule}\"]
             )
           end").runner.execute(:test)
 
-        expect(result).to include(" -rule CoveredSwitchStatementsDon\\'tNeedDefault ")
-        expect(result).to include(" -disable-rule CoveredSwitchStatementsDon\\'tNeedDefault ")
+        expect(result).to include(" -rule #{rule.shellescape} ")
+        expect(result).to include(" -disable-rule #{rule.shellescape} ")
+      end
+
+      it "finds sources whose path xcodebuild wrote with escaped spaces, and passes each as one argument" do
+        Dir.mktmpdir do |dir|
+          folder = File.join(dir, "Kaldi Kafe")
+          FileUtils.mkdir_p(File.join(folder, "src"))
+          source = File.join(folder, "src", "main.m")
+          FileUtils.touch(source)
+          # xcodebuild's output, and so xcpretty's database, writes the space as "\ "
+          escaped_source = File.join(dir, "Kaldi\\ Kafe", "src", "main.m")
+          database = File.join(dir, "compile_commands.json")
+          File.write(database, JSON.generate([{ "directory" => folder, "file" => escaped_source, "command" => "clang -c main.m" }]))
+
+          result = Fastlane::FastFile.new.parse("lane :test do
+              oclint(compile_commands: #{database.inspect})
+            end").runner.execute(:test)
+
+          expect(Shellwords.split(result).last).to eq(source)
+        end
+      end
+
+      it "passes a report path with spaces and an apostrophe as one argument" do
+        report = File.join(Dir.tmpdir, "Kaldi's Kafe", "report.html")
+        result = Fastlane::FastFile.new.parse("lane :test do
+            oclint(compile_commands: './fastlane/spec/fixtures/oclint/compile_commands.json', report_path: #{report.inspect})
+          end").runner.execute(:test)
+
+        expect(Shellwords.split(result)).to include("-o=#{report}")
       end
 
       it "works with select regex" do
@@ -84,10 +119,21 @@ describe Fastlane do
             )
           end").runner.execute(:test)
 
-        expect(result).to include('"fastlane/spec/fixtures/oclint/src/AppDelegate.m"')
+        expect(result).to include(' fastlane/spec/fixtures/oclint/src/AppDelegate.m')
       end
 
-      it "worsk with exclude regex" do
+      it "works with select regex when regex is string" do
+        result = Fastlane::FastFile.new.parse("lane :test do
+            oclint(
+              compile_commands: './fastlane/spec/fixtures/oclint/compile_commands.json',
+              select_regex: \"\/AppDelegate\"
+            )
+          end").runner.execute(:test)
+
+        expect(result).to include(' fastlane/spec/fixtures/oclint/src/AppDelegate.m')
+      end
+
+      it "works with exclude regex" do
         result = Fastlane::FastFile.new.parse("lane :test do
             oclint(
               compile_commands: './fastlane/spec/fixtures/oclint/compile_commands.json',
@@ -95,7 +141,7 @@ describe Fastlane do
             )
           end").runner.execute(:test)
 
-        expect(result).not_to include('"fastlane/spec/fixtures/oclint/src/Test.m"')
+        expect(result).not_to(include('fastlane/spec/fixtures/oclint/src/Test.m'))
       end
 
       it "works with both select and exclude regex" do
@@ -107,8 +153,8 @@ describe Fastlane do
             )
           end").runner.execute(:test)
 
-        expect(result).to include('"fastlane/spec/fixtures/oclint/src/AppDelegate.m"')
-        expect(result).not_to include('Test')
+        expect(result).to include(' fastlane/spec/fixtures/oclint/src/AppDelegate.m')
+        expect(result).not_to(include('Test'))
       end
 
       context 'with valid path to compile_commands.json' do
@@ -118,7 +164,7 @@ describe Fastlane do
               oclint( compile_commands: "./fastlane/spec/fixtures/oclint/compile_commands.json" )
             end').runner.execute(:test)
           end
-          let(:command) { "cd #{File.expand_path('..').shellescape} && oclint -report-type=html -o=oclint_report.html" }
+          let(:command) { "cd #{File.expand_path('.').shellescape} && oclint -report-type=html -o=oclint_report.html" }
 
           it 'uses system wide oclint' do
             expect(result).to include(command)
@@ -134,7 +180,7 @@ describe Fastlane do
               )
             end').runner.execute(:test)
           end
-          let(:command) { "cd #{File.expand_path('..').shellescape} && test/bin/oclint -report-type=html -o=oclint_report.html" }
+          let(:command) { "cd #{File.expand_path('.').shellescape} && test/bin/oclint -report-type=html -o=oclint_report.html" }
 
           it 'uses oclint provided' do
             expect(result).to include(command)

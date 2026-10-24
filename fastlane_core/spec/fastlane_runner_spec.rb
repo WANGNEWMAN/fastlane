@@ -1,5 +1,3 @@
-require 'spec_helper'
-
 describe Commander::Runner do
   describe 'tool collector interactions' do
     class CommandsGenerator
@@ -21,8 +19,8 @@ describe Commander::Runner do
         #
         # This is not ideal, but the downside is potential broken tests in the future,
         # which we can quickly adjust.
-        global_option '--format', String
-        global_option '--out', String
+        global_option('--format', String)
+        global_option('--out', String)
 
         command :run do |c|
           c.action do |args, options|
@@ -30,42 +28,10 @@ describe Commander::Runner do
           end
         end
 
-        default_command :run
+        default_command(:run)
 
         run!
       end
-    end
-
-    let(:mock_tool_collector) { FastlaneCore::ToolCollector.new }
-
-    before(:each) do
-      allow(Commander::Runner).to receive(:instance).and_return(Commander::Runner.new)
-      expect(FastlaneCore::ToolCollector).to receive(:new).and_return(mock_tool_collector)
-    end
-
-    it "calls the tool collector lifecycle methods for a successful run" do
-      expect(mock_tool_collector).to receive(:did_launch_action).with("tool_name").and_call_original
-      expect(mock_tool_collector).to receive(:did_finish).and_call_original
-
-      CommandsGenerator.new.run
-    end
-
-    it "calls the tool collector lifecycle methods for a crash" do
-      expect(mock_tool_collector).to receive(:did_launch_action).with("tool_name").and_call_original
-      expect(mock_tool_collector).to receive(:did_crash).with("tool_name").and_call_original
-
-      expect do
-        CommandsGenerator.new(raise_error: StandardError).run
-      end.to raise_error(StandardError)
-    end
-
-    it "calls the tool collector lifecycle methods for a user error" do
-      expect(mock_tool_collector).to receive(:did_launch_action).with("tool_name").and_call_original
-      expect(mock_tool_collector).to receive(:did_raise_error).with("tool_name").and_call_original
-
-      expect do
-        CommandsGenerator.new(raise_error: FastlaneCore::Interface::FastlaneError).run
-      end.to raise_error(SystemExit)
     end
   end
 
@@ -94,21 +60,56 @@ describe Commander::Runner do
       end.to raise_error(StandardError, '[!] my message'.red)
     end
 
-    it 'should abort and show custom info for errors that have the Apple error info provider method with $verbose=false' do
+    it 'should abort and show custom info for errors that have the Apple error info provider method with FastlaneCore::Globals.verbose?=false' do
       runner = Commander::Runner.new
       expect(runner).to receive(:abort).with("\n[!] Title\n\tLine 1\n\tLine 2".red)
 
-      with_verbose(false) do
+      FastlaneSpec::Env.with_verbose(false) do
         runner.handle_unknown_error!(CustomError.new)
       end
     end
 
-    it 'should reraise and show custom info for errors that have the Apple error info provider method with $verbose=true' do
-      with_verbose(true) do
+    it 'should reraise and show custom info for errors that have the Apple error info provider method with FastlaneCore::Globals.verbose?=true' do
+      FastlaneSpec::Env.with_verbose(true) do
         expect do
           Commander::Runner.new.handle_unknown_error!(CustomError.new)
         end.to raise_error(CustomError, "[!] Title\n\tLine 1\n\tLine 2".red)
       end
+    end
+  end
+
+  describe '#suggest_ruby_reinstall' do
+    it 'suggests the Ruby version fastlane recommends' do
+      errors = []
+      allow(FastlaneCore::UI).to receive(:error) { |message| errors << message }
+
+      Commander::Runner.new.suggest_ruby_reinstall(StandardError.new('my message'))
+
+      expect(errors).to include("  - Run `brew update && brew upgrade ruby-build && rbenv install #{Fastlane::SUGGESTED_MINIMUM_RUBY}`")
+      expect(errors).to include("  - Run `rbenv global #{Fastlane::SUGGESTED_MINIMUM_RUBY}` to make it the new global default Ruby version")
+      expect(errors).to include("  - Then run `rvm reinstall ruby-#{Fastlane::SUGGESTED_MINIMUM_RUBY}`")
+    end
+  end
+
+  describe '#rescue_fastlane_error' do
+    it 'calls show_github_issues if e.show_github_issues is true' do
+      runner = Commander::Runner.new
+      error = FastlaneCore::Interface::FastlaneShellError.new(show_github_issues: true)
+      allow(error).to receive(:message).and_return('error message')
+      expect(runner).to receive(:show_github_issues).with('error message')
+      expect(runner).to receive(:display_user_error!)
+
+      runner.rescue_fastlane_error(error)
+    end
+
+    it 'does not call show_github_issues if e.show_github_issues is false' do
+      runner = Commander::Runner.new
+      error = FastlaneCore::Interface::FastlaneShellError.new(show_github_issues: false)
+      allow(error).to receive(:message).and_return('error message')
+      expect(runner).to_not(receive(:show_github_issues))
+      expect(runner).to receive(:display_user_error!)
+
+      runner.rescue_fastlane_error(error)
     end
   end
 end

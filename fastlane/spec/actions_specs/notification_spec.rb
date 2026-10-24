@@ -1,3 +1,8 @@
+# The notification action requires this lazily, inside its run method, so
+# examples referencing the TerminalNotifier constant only find it when another
+# example has already run the action. See fastlane#30184.
+require 'terminal-notifier'
+
 describe Fastlane do
   describe Fastlane::FastFile do
     describe "notification action" do
@@ -9,7 +14,7 @@ describe Fastlane do
               subtitle: 'hi'
             )
           end").runner.execute(:test)
-        end.to raise_exception
+        end.to raise_exception(FastlaneCore::Interface::FastlaneError, "No value found for 'message'")
       end
 
       it "works with message argument alone" do
@@ -63,7 +68,7 @@ describe Fastlane do
       end
 
       it "does not pass unspecified arguments with message argument" do
-        expect(TerminalNotifier).to receive(:notify).with("hello", hash_excluding(*%i(subtitle sound activate appIcon contentImage open execute)))
+        expect(TerminalNotifier).to receive(:notify).with("hello", hash_excluding(:subtitle, :sound, :activate, :appIcon, :contentImage, :open, :execute))
 
         Fastlane::FastFile.new.parse("lane :test do
           notification(
@@ -73,7 +78,7 @@ describe Fastlane do
       end
 
       it "does not pass unspecified arguments with message and title argument" do
-        expect(TerminalNotifier).to receive(:notify).with("hello", hash_excluding(*%i(subtitle sound activate appIcon contentImage open execute)))
+        expect(TerminalNotifier).to receive(:notify).with("hello", hash_excluding(:subtitle, :sound, :activate, :appIcon, :contentImage, :open, :execute))
 
         Fastlane::FastFile.new.parse("lane :test do
           notification(
@@ -84,7 +89,7 @@ describe Fastlane do
       end
 
       it "does not pass unspecified arguments with message and subtitle argument" do
-        expect(TerminalNotifier).to receive(:notify).with("hello", hash_excluding(*%i(sound activate appIcon contentImage open execute)))
+        expect(TerminalNotifier).to receive(:notify).with("hello", hash_excluding(:sound, :activate, :appIcon, :contentImage, :open, :execute))
 
         Fastlane::FastFile.new.parse("lane :test do
           notification(
@@ -95,7 +100,7 @@ describe Fastlane do
       end
 
       it "does not pass unspecified arguments with message, title and subtitle argument" do
-        expect(TerminalNotifier).to receive(:notify).with("hello", hash_excluding(*%i(sound activate appIcon contentImage open execute)))
+        expect(TerminalNotifier).to receive(:notify).with("hello", hash_excluding(:sound, :activate, :appIcon, :contentImage, :open, :execute))
 
         Fastlane::FastFile.new.parse("lane :test do
           notification(

@@ -1,13 +1,15 @@
+require 'tmpdir'
+
 module Fastlane
   module Actions
     class LcovAction < Action
       def self.is_supported?(platform)
-        [:ios, :mac].include? platform
+        [:ios, :mac].include?(platform)
       end
 
       def self.run(options)
         unless Helper.test?
-          UI.user_error!("lcov not installed, please install using `brew install lcov`") if `which lcov`.length == 0
+          UI.user_error!("lcov not installed, please install using `brew install lcov`") unless Helper.which('lcov')
         end
         gen_cov(options)
       end
@@ -22,21 +24,17 @@ module Fastlane
           FastlaneCore::ConfigItem.new(key: :project_name,
                                        env_name: "FL_LCOV_PROJECT_NAME",
                                        description: "Name of the project"),
-
           FastlaneCore::ConfigItem.new(key: :scheme,
                                        env_name: "FL_LCOV_SCHEME",
                                        description: "Scheme of the project"),
-
           FastlaneCore::ConfigItem.new(key: :arch,
                                        env_name: "FL_LCOV_ARCH",
                                        description: "The build arch where will search .gcda files",
                                        default_value: "i386"),
-
           FastlaneCore::ConfigItem.new(key: :output_dir,
                                        env_name: "FL_LCOV_OUTPUT_DIR",
                                        description: "The output directory that coverage data will be stored. If not passed will use coverage_reports as default value",
                                        optional: true,
-                                       is_string: true,
                                        default_value: "coverage_reports")
         ]
       end
@@ -46,7 +44,7 @@ module Fastlane
       end
 
       def self.gen_cov(options)
-        tmp_cov_file = "/tmp/coverage.info"
+        tmp_cov_file = File.join(Dir.mktmpdir("lcov-"), "coverage.info")
         output_dir = options[:output_dir]
         derived_data_path = derived_data_dir(options)
 
@@ -82,6 +80,27 @@ module Fastlane
 
       def self.exclude_dirs
         ["/Applications/*", "/Frameworks/*"]
+      end
+
+      def self.example_code
+        [
+          'lcov(
+            project_name: "ProjectName",
+            scheme: "yourScheme",
+            output_dir: "cov_reports" # This value is optional. Default is coverage_reports
+          )'
+        ]
+      end
+
+      def self.category
+        :deprecated
+      end
+
+      def self.deprecated_notes
+        [
+          "Xcode records coverage as LLVM `.profdata`, not the gcov `.gcda` files that `lcov --capture --directory` reads, and this action looks for them under `Build/Intermediates`, which Xcode now names `Build/Intermediates.noindex`.",
+          "Use `slather`, or `xcrun llvm-cov export -format=lcov` to produce an lcov file."
+        ].join("\n")
       end
     end
   end

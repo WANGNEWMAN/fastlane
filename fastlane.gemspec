@@ -1,0 +1,116 @@
+# coding: utf-8
+
+lib = File.expand_path('../fastlane/lib', __FILE__)
+$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
+require 'fastlane/version'
+
+Gem::Specification.new do |spec|
+  spec.name          = "fastlane"
+  spec.version       = Fastlane::VERSION
+  # list of authors is regenerated and resorted on each release
+  spec.authors       = ["Felix Krause",
+                        "Jimmy Dee",
+                        "Connor Tumbleson",
+                        "Manish Rathi",
+                        "Daniel Jankowski",
+                        "Kohki Miki",
+                        "Josh Holtz",
+                        "Manu Wallner",
+                        "Stefan Natchev",
+                        "Olivier Halligon",
+                        "Max Ott",
+                        "Helmut Januschka",
+                        "Luka Mirosevic",
+                        "Satoshi Namai",
+                        "Roger Oba",
+                        "Danielle Tomlinson",
+                        "Andrew McBurney",
+                        "Iulian Onofrei",
+                        "Aaron Brager",
+                        "Jan Piotrowski",
+                        "Jérôme Lacoste",
+                        "Jorge Revuelta H",
+                        "Maksym Grebenets",
+                        "Joshua Liebowitz",
+                        "Fumiya Nakamura",
+                        "Łukasz Grabowski",
+                        "Matthew Ellis"]
+
+  spec.email         = ["fastlane@krausefx.com"]
+  spec.summary       = Fastlane::SUMMARY
+  spec.description   = Fastlane::DESCRIPTION
+  spec.homepage      = "https://fastlane.tools"
+  spec.license       = "MIT"
+  spec.metadata      = {
+    "bug_tracker_uri" => "https://github.com/fastlane/fastlane/issues",
+    "changelog_uri" => "https://github.com/fastlane/fastlane/releases",
+    "documentation_uri" => "https://docs.fastlane.tools/",
+    "homepage_uri" => spec.homepage,
+    "source_code_uri" => "https://github.com/fastlane/fastlane"
+  }
+
+  # A literal: RuboCop reads its target Ruby from it. spec/ci_ruby_versions_spec.rb checks both against Fastlane::MINIMUM_RUBY
+  spec.required_ruby_version = '>= 3.2.0'
+
+  spec.files = Dir.glob("*/lib/**/*", File::FNM_DOTMATCH) + Dir["fastlane/swift/**/*"] + Dir["bin/*"] + Dir["*/README.md"] + %w(README.md LICENSE .yardopts) - Dir["fastlane/lib/fastlane/actions/device_grid/assets/*"] - Dir["fastlane/lib/fastlane/actions/docs/assets/*"]
+  spec.bindir = "bin"
+  spec.executables = spec.files.grep(%r{^bin/}) { |f| File.basename(f) } - ["console"]
+  spec.require_paths = Dir["*/lib"]
+
+  spec.add_dependency('addressable', '>= 2.9.0', '< 3.0.0') # Support for URI templates
+  spec.add_dependency('artifactory', '~> 3.0') # Used to export to an artifactory server
+  spec.add_dependency('aws-sdk-s3', '~> 1.197') # Used for S3 storage in fastlane match
+  spec.add_dependency('babosa', '>= 1.0.3', '< 2.0.0') # library for creating human-friendly identifiers, aka "slugs"
+  spec.add_dependency('bundler', '>= 2.4.0', '< 5.0.0') # Used for fastlane plugins
+  spec.add_dependency('CFPropertyList', '>= 2.3', '< 5.0.0') # Needed to be able to read binary plist format
+  spec.add_dependency('colored', '~> 1.2') # colored terminal output
+  spec.add_dependency('commander', '~> 4.6') # CLI parser
+  spec.add_dependency('dotenv', '>= 2.1.1', '< 3.0.0')
+  spec.add_dependency('emoji_regex', '>= 0.1', '< 4.0') # Used to scan for Emoji in the changelog
+  spec.add_dependency('erb', '>= 4.0', '< 7.0') # Used for templating
+  spec.add_dependency('excon', '>= 1.0.0', '< 2.0.0') # Great HTTP Client
+  spec.add_dependency('faraday', '~> 2.7') # The faraday gem is used for deploygate, hockey and testfairy actions.
+  spec.add_dependency('faraday-cookie_jar', '~> 0.0.8') # Spaceship uses this to store cookies for the session, when authorizing with login/password.
+  spec.add_dependency('faraday-follow_redirects', '~> 0.3') # Replaces FaradayMiddleware::FollowRedirects from faraday_middleware
+  spec.add_dependency('faraday-multipart', '~> 1.0') # Converts Request.body into a multipart.
+  spec.add_dependency('faraday-retry', '~> 2.0') # Retry request middleware, extracted from faraday core in Faraday 2
+  spec.add_dependency('fastimage', '>= 2.1.0', '< 3.0.0') # fetch the image sizes from the screenshots
+  spec.add_dependency('fastlane-sirp', '>= 1.1.0') # used for sirp login
+  spec.add_dependency('gh_inspector', '>= 1.1.2', '< 2.0.0') # search for issues on GitHub when something goes wrong
+  spec.add_dependency('google-apis-androidpublisher_v3', '~> 0.99') # Google API Client to access Play Publishing API
+  spec.add_dependency('google-apis-playcustomapp_v1', '~> 0.1') # Google API Client to access Custom app Publishing API
+  spec.add_dependency('google-cloud-env', '>= 1.6.0', '< 2.5.0') # Must be < 2.5.0 to support Ruby 3.2
+  spec.add_dependency('google-cloud-storage', '~> 1.31') # Access Google Cloud Storage for match
+  spec.add_dependency('highline', '~> 2.0') # user inputs (e.g. passwords)
+  spec.add_dependency('json', '< 3.0.0') # Because sometimes it's just not installed
+  spec.add_dependency('jwt', '>= 2.10.3', '< 4') # Used for generating authentication tokens for App Store Connect API
+  spec.add_dependency('mini_magick', '>= 4.9.4', '< 5.0.0') # To open, edit and export PSD files
+  spec.add_dependency('multi_json', '~> 1.12') # Needed for upstream Google bug: googleapis/google-api-ruby-client/issues/26611
+  spec.add_dependency('multipart-post', '>= 2.0.0', '< 3.0.0') # Needed for uploading builds to appetize
+  spec.add_dependency('naturally', '~> 2.2') # Used to sort strings with numbers in a human-friendly way
+  spec.add_dependency('optparse', '>= 0.1.1', '< 1.0.0') # Used to parse options with Commander
+  spec.add_dependency('plist', '>= 3.1.0', '< 4.0.0') # Needed for set_build_number_repository and get_info_plist_value actions
+  spec.add_dependency('rubyzip', '>= 3.4.0', '< 4.0.0') # fix swift/ipa in gym
+  spec.add_dependency('security', '~> 0.3') # macOS Keychain manager
+  spec.add_dependency('simctl', '~> 1.6.3') # Used for querying and interacting with iOS simulators
+  spec.add_dependency('terminal-notifier', '>= 3.1.0', '< 4.0.0') # macOS notifications
+  spec.add_dependency('terminal-table', '~> 4') # Actions documentation
+  spec.add_dependency('tty-screen', '>= 0.6.3', '< 1.0.0') # detect the terminal width
+  spec.add_dependency('tty-spinner', '>= 0.8.0', '< 1.0.0') # loading indicators
+  spec.add_dependency('word_wrap', '~> 1.0.0') # to add line breaks for tables with long strings
+  spec.add_dependency('xcodeproj', '>= 1.13.0', '< 2.0.0') # Modify Xcode projects
+  spec.add_dependency('xcpretty-travis-formatter', '>= 0.0.3', '< 2.0.0')
+  spec.add_dependency('xcpretty', '~> 0.4.1') # prettify xcodebuild output
+
+  # As Ruby evolves, some stdlib modules are no longer bundled with Ruby and instead standard gems.
+  spec.add_dependency('abbrev', '~> 0.1') # 3.4 - workaround for highline as can't upgrade to 3.x yet
+  spec.add_dependency('base64', '~> 0.2') # 3.4 - workaround for CFPropertyList as can't upgrade to 4.x yet
+  spec.add_dependency('csv', '~> 3.3') # 3.4 - used directly by register_devices and pilot
+  spec.add_dependency('mutex_m', '~> 0.3') # 3.4 - workaround for httpclient as can't upgrade to 2.9 yet
+  spec.add_dependency('nkf', '~> 0.2') # 3.4 - workaround for CFPropertyList as can't upgrade to 4.x yet
+  spec.add_dependency('irb', '>= 1.8') # 4.0 - stdlib gem removed from default set; used by `fastlane console`
+  spec.add_dependency('logger', '>= 1.6', '< 2.0') # 4.0 - stdlib gem removed from default set
+  spec.add_dependency('cgi', '~> 0.4') # 4.0 - stdlib gem removed from default set
+  spec.add_dependency('benchmark', '>= 0.1.0') # 4.1 - stdlib gem removed from default set
+  spec.add_dependency('ostruct', '>= 0.1.0') # 4.1 - stdlib gem removed from default set
+end

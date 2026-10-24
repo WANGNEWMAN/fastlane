@@ -1,53 +1,348 @@
 describe FastlaneCore do
   describe FastlaneCore::Helper do
-    describe "#is_ci?" do
+    describe "#bundler?" do
+      it "returns false when not in a bundler environment" do
+        stub_const('ENV', {})
+        expect(FastlaneCore::Helper.bundler?).to be(false)
+      end
+
+      it "returns true BUNDLE_BIN_PATH is defined" do
+        stub_const('ENV', { 'BUNDLE_BIN_PATH' => '/fake/elsewhere' })
+        expect(FastlaneCore::Helper.bundler?).to be(true)
+      end
+
+      it "returns true BUNDLE_GEMFILE is defined" do
+        stub_const('ENV', { 'BUNDLE_GEMFILE' => '/fake/elsewhere/myFile' })
+        expect(FastlaneCore::Helper.bundler?).to be(true)
+      end
+    end
+
+    describe "#xcode_at_least?" do
+      ["15.2", "15.2.3", 15, 15.3].each do |check_version|
+        ["15.3", "16"].each do |xcode_version|
+          it "Xcode #{xcode_version} is at least #{check_version}" do
+            allow(FastlaneCore::Helper).to receive(:xcode_version).and_return(xcode_version)
+
+            expect(FastlaneCore::Helper.xcode_at_least?(check_version)).to be(true)
+          end
+        end
+
+        ["14", "14.99.99"].each do |xcode_version|
+          it "Xcode #{xcode_version} is less than #{check_version}" do
+            allow(FastlaneCore::Helper).to receive(:xcode_version).and_return(xcode_version)
+
+            expect(FastlaneCore::Helper.xcode_at_least?(check_version)).to be(false)
+          end
+        end
+      end
+    end
+
+    describe '#colors_disabled?' do
+      it "should return false if no environment variables set" do
+        stub_const('ENV', {})
+        expect(FastlaneCore::Helper.colors_disabled?).to be(false)
+      end
+      it "should return true if FASTLANE_DISABLE_COLORS" do
+        stub_const('ENV', { "FASTLANE_DISABLE_COLORS" => "true" })
+        expect(FastlaneCore::Helper.colors_disabled?).to be(true)
+      end
+      it "should return true if NO_COLORS" do
+        stub_const('ENV', { "NO_COLOR" => 1 })
+        expect(FastlaneCore::Helper.colors_disabled?).to be(true)
+      end
+    end
+
+    describe '#json_file?' do
+      it "should return false on invalid json file" do
+        expect(FastlaneCore::Helper.json_file?("./fastlane_core/spec/fixtures/json_file/broken")).to be(false)
+      end
+      it "should return true on valid json file" do
+        expect(FastlaneCore::Helper.json_file?("./fastlane_core/spec/fixtures/json_file/valid")).to be(true)
+      end
+    end
+
+    describe "#ci?" do
       it "returns false when not building in a known CI environment" do
         stub_const('ENV', {})
-        expect(FastlaneCore::Helper.is_ci?).to be false
+        expect(FastlaneCore::Helper.ci?).to be(false)
+      end
+
+      it "returns true when building in CircleCI" do
+        stub_const('ENV', { 'CIRCLECI' => true })
+        expect(FastlaneCore::Helper.ci?).to be(true)
       end
 
       it "returns true when building in Jenkins" do
         stub_const('ENV', { 'JENKINS_URL' => 'http://fake.jenkins.url' })
-        expect(FastlaneCore::Helper.is_ci?).to be true
+        expect(FastlaneCore::Helper.ci?).to be(true)
       end
 
       it "returns true when building in Jenkins Slave" do
         stub_const('ENV', { 'JENKINS_HOME' => '/fake/jenkins/home' })
-        expect(FastlaneCore::Helper.is_ci?).to be true
+        expect(FastlaneCore::Helper.ci?).to be(true)
       end
 
       it "returns true when building in Travis CI" do
         stub_const('ENV', { 'TRAVIS' => true })
-        expect(FastlaneCore::Helper.is_ci?).to be true
+        expect(FastlaneCore::Helper.ci?).to be(true)
       end
 
       it "returns true when building in gitlab-ci" do
         stub_const('ENV', { 'GITLAB_CI' => true })
-        expect(FastlaneCore::Helper.is_ci?).to be true
+        expect(FastlaneCore::Helper.ci?).to be(true)
+      end
+
+      it "returns true when building in AppCenter" do
+        stub_const('ENV', { 'APPCENTER_BUILD_ID' => '185' })
+        expect(FastlaneCore::Helper.ci?).to be(true)
+      end
+
+      it "returns true when building in GitHub Actions" do
+        stub_const('ENV', { 'GITHUB_ACTION' => 'FAKE_ACTION' })
+        expect(FastlaneCore::Helper.ci?).to be(true)
+        stub_const('ENV', { 'GITHUB_ACTIONS' => 'true' })
+        expect(FastlaneCore::Helper.ci?).to be(true)
       end
 
       it "returns true when building in Xcode Server" do
         stub_const('ENV', { 'XCS' => true })
-        expect(FastlaneCore::Helper.is_ci?).to be true
+        expect(FastlaneCore::Helper.ci?).to be(true)
+      end
+
+      it "returns true when building in Azure DevOps (VSTS) " do
+        stub_const('ENV', { 'TF_BUILD' => true })
+        expect(FastlaneCore::Helper.ci?).to be(true)
       end
     end
 
-    # Mac OS only (to work on Linux)
-    if FastlaneCore::Helper.is_mac?
-      describe "Xcode" do
-        # Those tests also work when using a beta version of Xcode
-        it "#xcode_path" do
-          expect(FastlaneCore::Helper.xcode_path[-1]).to eq('/')
-          expect(FastlaneCore::Helper.xcode_path).to match(%r{/Applications/Xcode.*.app/Contents/Developer/})
+    describe "#is_circle_ci?" do
+      it "returns true when building in CircleCI" do
+        stub_const('ENV', { 'CIRCLECI' => true })
+        expect(FastlaneCore::Helper.ci?).to be(true)
+      end
+
+      it "returns false when not building in a known CI environment" do
+        stub_const('ENV', {})
+        expect(FastlaneCore::Helper.ci?).to be(false)
+      end
+    end
+
+    describe "#keychain_path" do
+      it "finds file in current directory" do
+        allow(File).to receive(:file?).and_return(false)
+
+        found = File.expand_path("test.keychain")
+        allow(File).to receive(:file?).with(found).and_return(true)
+
+        expect(FastlaneCore::Helper.keychain_path("test.keychain")).to eq(File.expand_path(found))
+      end
+
+      it "finds file in current directory with -db" do
+        allow(File).to receive(:file?).and_return(false)
+
+        found = File.expand_path("test-db")
+        allow(File).to receive(:file?).with(found).and_return(true)
+
+        expect(FastlaneCore::Helper.keychain_path("test.keychain")).to eq(File.expand_path(found))
+      end
+
+      it "finds file in current directory with spaces and \"" do
+        allow(File).to receive(:file?).and_return(false)
+
+        found = File.expand_path('\\"\\ test\\ \\".keychain')
+        allow(File).to receive(:file?).with(found).and_return(true)
+
+        expect(FastlaneCore::Helper.keychain_path('\\"\\ test\\ \\".keychain')).to eq(File.expand_path(found))
+      end
+    end
+
+    describe "Xcode" do
+      # Those tests also work when using a beta version of Xcode
+      it "#xcode_path", requires_xcode: true do
+        expect(FastlaneCore::Helper.xcode_path[-1]).to eq('/')
+        expect(FastlaneCore::Helper.xcode_path).to match(%r{/Applications/Xcode.*.app/Contents/Developer/})
+      end
+
+      it "#transporter_path", requires_xcode: true do
+        unless FastlaneCore::Helper.xcode_at_least?("14")
+          expect(FastlaneCore::Helper.transporter_path).to match(%r{/Applications/Xcode.*.app/Contents/Applications/Application Loader.app/Contents/itms/bin/iTMSTransporter|/Applications/Xcode.*.app/Contents/SharedFrameworks/ContentDeliveryServices.framework/Versions/A/itms/bin/iTMSTransporter})
+        end
+      end
+
+      it "#xcode_version", requires_xcode: true do
+        expect(FastlaneCore::Helper.xcode_version).to match(/^\d[\.\d]+$/)
+      end
+
+      context "#user_defined_itms_path?" do
+        it "not defined", requires_xcode: true do
+          stub_const('ENV', { 'FASTLANE_ITUNES_TRANSPORTER_PATH' => nil })
+          expect(FastlaneCore::Helper.user_defined_itms_path?).to be(false)
         end
 
-        it "#transporter_path" do
-          expect(FastlaneCore::Helper.transporter_path).to match(%r{/Applications/Xcode.*.app/Contents/Applications/Application Loader.app/Contents/itms/bin/iTMSTransporter})
+        it "is defined", requires_xcode: true do
+          stub_const('ENV', { 'FASTLANE_ITUNES_TRANSPORTER_PATH' => '/some/path/to/something' })
+          expect(FastlaneCore::Helper.user_defined_itms_path?).to be(true)
+        end
+      end
+
+      context "#user_defined_itms_path" do
+        it "not defined", requires_xcode: true do
+          stub_const('ENV', { 'FASTLANE_ITUNES_TRANSPORTER_PATH' => nil })
+          expect(FastlaneCore::Helper.user_defined_itms_path).to be(nil)
         end
 
-        it "#xcode_version" do
-          expect(FastlaneCore::Helper.xcode_version).to match(/^\d[\.\d]+$/)
+        it "is defined", requires_xcode: true do
+          stub_const('ENV', { 'FASTLANE_ITUNES_TRANSPORTER_PATH' => '/some/path/to/something' })
+          expect(FastlaneCore::Helper.user_defined_itms_path).to eq('/some/path/to/something')
         end
+      end
+
+      context "#itms_path" do
+        it "default", requires_xcode: true do
+          stub_const('ENV', { 'FASTLANE_ITUNES_TRANSPORTER_PATH' => nil })
+
+          if FastlaneCore::Helper.xcode_at_least?("14")
+            expect(FastlaneCore::UI).to receive(:user_error!).with(/Could not find transporter/)
+            expect { FastlaneCore::Helper.itms_path }.not_to raise_error
+          else
+            expect(FastlaneCore::Helper.itms_path).to match(/itms/)
+          end
+        end
+
+        it "uses FASTLANE_ITUNES_TRANSPORTER_PATH", requires_xcode: true do
+          stub_const('ENV', { 'FASTLANE_ITUNES_TRANSPORTER_PATH' => '/some/path/to/something' })
+          expect(FastlaneCore::Helper.itms_path).to eq('/some/path/to/something')
+        end
+      end
+    end
+
+    describe "#zip_directory" do
+      let(:directory) { File.absolute_path('/tmp/directory') }
+      let(:directory_to_zip) { File.absolute_path('/tmp/directory/to_zip') }
+      let(:the_zip) { File.absolute_path('/tmp/thezip.zip') }
+
+      it "creates correct zip command with contents_only set to false with default print option (true)" do
+        expect(FastlaneCore::Helper).to receive(:backticks)
+          .with("cd #{directory.shellescape} && zip -r #{the_zip.shellescape} to_zip", print: true)
+          .exactly(1).times
+
+        FastlaneCore::Helper.zip_directory(directory_to_zip, the_zip, contents_only: false)
+      end
+
+      it "creates correct zip command with contents_only set to true with print set to false" do
+        expect(FastlaneCore::Helper).to receive(:backticks)
+          .with("cd #{directory_to_zip.shellescape} && zip -r #{the_zip.shellescape} *", print: false)
+          .exactly(1).times
+        expect(FastlaneCore::UI).to receive(:command).exactly(1).times
+
+        FastlaneCore::Helper.zip_directory(directory_to_zip, the_zip, contents_only: true, print: false)
+      end
+
+      it "keeps paths with an apostrophe and a space as one argument each" do
+        folder = File.absolute_path("/tmp/Kaldi's Kafe")
+        command = nil
+        allow(FastlaneCore::Helper).to receive(:backticks) { |cmd, print:| command = cmd }
+
+        FastlaneCore::Helper.zip_directory(File.join(folder, "Build Products"), File.join(folder, "out put.zip"), overwrite: true)
+
+        expect(Shellwords.split(command)).to eq(["cd", folder, "&&", "rm", "-f", File.join(folder, "out put.zip"), "&&", "zip", "-r", File.join(folder, "out put.zip"), "Build Products"])
+      end
+    end
+
+    describe "#backticks" do
+      it "executes the command and returns the output" do
+        expect(FastlaneCore::Helper.backticks("echo hello")).to eq("hello\n")
+      end
+
+      it "prints the command and output if print is true" do
+        expect(FastlaneCore::UI).to receive(:command).with("echo hello")
+        expect(FastlaneCore::UI).to receive(:command_output).with("hello\n")
+        FastlaneCore::Helper.backticks("echo hello", print: true)
+      end
+
+      it "does not print the command and output if print is false" do
+        expect(FastlaneCore::UI).not_to receive(:command)
+        expect(FastlaneCore::UI).not_to receive(:command_output)
+        FastlaneCore::Helper.backticks("echo hello", print: false)
+      end
+    end
+
+    describe "#which" do
+      it "delegates to FastlaneCore::CommandExecutor.which" do
+        expect(FastlaneCore::CommandExecutor).to receive(:which).with('ruby').and_return('/usr/bin/ruby')
+        expect(FastlaneCore::Helper.which('ruby')).to eq('/usr/bin/ruby')
+      end
+
+      it "returns nil when command is not found" do
+        expect(FastlaneCore::CommandExecutor).to receive(:which).with('not_a_real_command').and_return(nil)
+        expect(FastlaneCore::Helper.which('not_a_real_command')).to be_nil
+      end
+    end
+
+    describe "#fastlane_enabled?" do
+      it "returns false when FastlaneCore::FastlaneFolder.path is nil" do
+        expect(FastlaneCore::FastlaneFolder).to receive(:path).and_return(nil)
+        expect(FastlaneCore::Helper.fastlane_enabled?).to be(false)
+      end
+
+      it "returns true when FastlaneCore::FastlaneFolder.path is not nil" do
+        expect(FastlaneCore::FastlaneFolder).to receive(:path).and_return('./fastlane')
+        expect(FastlaneCore::Helper.fastlane_enabled?).to be(true)
+      end
+    end
+
+    describe "loading indicator" do
+      let(:spinners) { [] }
+      # tty-spinner only writes to a terminal
+      let(:output) { StringIO.new.tap { |io| io.define_singleton_method(:tty?) { true } } }
+
+      before do
+        allow(FastlaneCore::Helper).to receive(:should_show_loading_indicator?).and_return(true)
+        allow(TTY::Spinner).to receive(:new).and_wrap_original do |original, *args, **options|
+          original.call(*args, **options, output: output).tap { |spinner| spinners << spinner }
+        end
+      end
+
+      after do
+        spinners.each { |spinner| spinner.stop unless spinner.done? }
+        FastlaneCore::Helper.instance_variable_set(:@require_fastlane_spinner, nil)
+      end
+
+      it "stops the spinner and reports an error when the block raises" do
+        expect do
+          FastlaneCore::Helper.with_loading_indicator("Working") { raise "boom" }
+        end.to raise_error("boom")
+
+        expect(spinners.size).to eq(1)
+        expect(spinners.first.done?).to be(true)
+        expect(output.string).to include(TTY::Spinner::CROSS)
+        expect(output.string).not_to include(TTY::Spinner::TICK)
+      end
+
+      it "returns the block's value and reports success" do
+        expect(FastlaneCore::Helper.with_loading_indicator("Working") { 42 }).to eq(42)
+
+        expect(spinners.first.done?).to be(true)
+        expect(output.string).to include(TTY::Spinner::TICK)
+      end
+
+      def return_early_from_indicator
+        FastlaneCore::Helper.with_loading_indicator("Working") { return :early }
+      end
+
+      it "reports success when the block returns early" do
+        expect(return_early_from_indicator).to eq(:early)
+
+        expect(spinners.first.done?).to be(true)
+        expect(output.string).to include(TTY::Spinner::TICK)
+        expect(output.string).not_to include(TTY::Spinner::CROSS)
+      end
+
+      it "stops a spinner that was shown but never hidden before showing the next one" do
+        FastlaneCore::Helper.show_loading_indicator("First")
+        FastlaneCore::Helper.show_loading_indicator("Second")
+
+        expect(spinners.map(&:done?)).to eq([true, false])
       end
     end
   end

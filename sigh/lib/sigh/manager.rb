@@ -1,9 +1,10 @@
-require 'plist'
-require 'sigh/runner'
+require 'fastlane_core/provisioning_profile'
+
+require_relative 'runner'
 
 module Sigh
   class Manager
-    def self.start
+    def self.start(keychain_path: nil)
       path = Sigh::Runner.new.run
 
       return nil unless path
@@ -22,23 +23,29 @@ module Sigh
         # in case it already exists
       end
 
-      install_profile(output) unless Sigh.config[:skip_install]
+      install_profile(output, keychain_path) unless Sigh.config[:skip_install]
 
-      puts output.green
+      puts(output.green)
 
       return File.expand_path(output)
     end
 
-    def self.download_all
+    def self.download_all(download_xcode_profiles: false)
       require 'sigh/download_all'
-      DownloadAll.new.download_all
+      DownloadAll.new.download_all(download_xcode_profiles: download_xcode_profiles)
     end
 
-    def self.install_profile(profile)
-      udid = FastlaneCore::ProvisioningProfile.uuid(profile)
-      ENV["SIGH_UDID"] = udid if udid
+    def self.install_profile(profile, keychain_path = nil)
+      uuid = FastlaneCore::ProvisioningProfile.uuid(profile, keychain_path)
+      name = FastlaneCore::ProvisioningProfile.name(profile, keychain_path)
+      ENV["SIGH_UDID"] = ENV["SIGH_UUID"] = uuid if uuid
+      ENV["SIGH_NAME"] = name if name
 
-      FastlaneCore::ProvisioningProfile.install(profile)
+      if Helper.mac?
+        FastlaneCore::ProvisioningProfile.install(profile, keychain_path)
+      else
+        UI.message("Skipping installation of provisioning profile as it would not work on this operating system.")
+      end
     end
   end
 end

@@ -1,0 +1,5 @@
+* Revert "[produce] Support App Store Connect API key for create/enable_services/disable_services" (#30447) via Connor Tumbleson (@iBotPeaches)
+* [deliver] add iphone duo screenshot sizes (#30444) via Tim Shedor (@tshedor)
+* [snapshot] Add iPhone 18 Pro / Pro Max device names (#30443) via Emilia (@lazerwalker)
+* [ci] release: keep Bundler config out of the tracked .bundle/config (#30437) via Jerome Lacoste (@lacostej)
+* [ci] build: move openssl into group that release ignores (#30435) via Connor Tumbleson (@iBotPeaches)

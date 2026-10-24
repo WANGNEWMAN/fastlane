@@ -9,7 +9,7 @@ describe Frameit do
       it "raises an exception" do
         expect do
           Frameit::ConfigParser.new.parse("invalid_json")
-        end.to raise_exception "Invalid JSON file at path ''. Make sure it's a valid JSON file"
+        end.to raise_exception("Invalid JSON file at path ''. Make sure it's a valid JSON file")
       end
     end
 
@@ -22,17 +22,21 @@ describe Frameit do
       end
 
       it "let's the user access the stored data using both default and specific values" do
+        # A real directory, because the parser checks the font path exists. A
+        # literal "/tmp" is not one on Windows, where it resolves against the
+        # current drive and nothing in the suite creates it. See fastlane#30184.
+        font = Dir.tmpdir
         default = {
           title: {
             font: "/",
             color: "#7F8081"
           },
-          background: "./spec/fixtures/background.jpg"
+          background: "./frameit/spec/fixtures/background.jpg"
         }
         specific = {
           filter: "filter",
           title: {
-            font: "/tmp"
+            font: font
           }
         }
 
@@ -47,10 +51,10 @@ describe Frameit do
 
         expect(config.fetch_value("filter")).to eq(JSON.parse({
           title: {
-            font: "/tmp",
+            font: font,
             color: "#7F8081"
           },
-          background: "./spec/fixtures/background.jpg",
+          background: "./frameit/spec/fixtures/background.jpg",
           filter: "filter"
         }.to_json))
       end
